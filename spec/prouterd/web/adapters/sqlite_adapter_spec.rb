@@ -183,6 +183,12 @@ RSpec.describe Prouterd::Web::Adapters::SqliteAdapter do
       expect(adapter.list_runs(process_name: "lead_pipeline").size).to eq(1)
       expect(adapter.list_runs(process_name: "other")).to be_empty
     end
+
+    it "count_runs returns the total, filterable by process name" do
+      expect(adapter.count_runs).to eq(1)
+      expect(adapter.count_runs(process_name: "lead_pipeline")).to eq(1)
+      expect(adapter.count_runs(process_name: "no_such")).to eq(0)
+    end
   end
 
   describe "#get_process" do

@@ -32,6 +32,7 @@ module Prouterd
 
       # ----- runs -----
       def list_runs(filters = {});                       raise NotImplementedYet; end
+      def count_runs(filters = {});                      raise NotImplementedYet; end
       def get_run(run_uid);                              raise NotImplementedYet; end
       def get_run_steps(run_uid);                        raise NotImplementedYet; end
       def get_step(run_uid, step_id);                    raise NotImplementedYet; end

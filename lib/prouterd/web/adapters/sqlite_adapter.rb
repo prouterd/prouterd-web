@@ -172,6 +172,16 @@ module Prouterd
           rows.map { |r| run_to_hash(r) }
         end
 
+        def count_runs(filters = {})
+          process_name = filters[:process_name] || filters[:process]
+          if process_name
+            row = @db.query_row("SELECT COUNT(*) FROM runs WHERE process_name = ?", [process_name])
+          else
+            row = @db.query_row("SELECT COUNT(*) FROM runs")
+          end
+          row ? row.first.to_i : 0
+        end
+
         def get_run(run_uid)
           run = @runs_repo.get_run_by_uid(run_uid)
           return nil unless run

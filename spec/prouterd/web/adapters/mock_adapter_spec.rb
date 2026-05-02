@@ -23,11 +23,30 @@ RSpec.describe Prouterd::Web::Adapters::MockAdapter do
     end
   end
 
-  describe "#list_runs" do
+  describe "#list_runs / #count_runs" do
     it "returns run descriptors keyed by run_uid" do
       expect(adapter.list_runs).to all(
         include(:run_uid, :process_name, :status)
       )
+    end
+
+    it "respects offset and limit" do
+      total = adapter.count_runs
+      expect(total).to be >= 3
+
+      first_two = adapter.list_runs(limit: 2, offset: 0)
+      expect(first_two.size).to eq(2)
+
+      shifted = adapter.list_runs(limit: 2, offset: 1)
+      expect(shifted.first[:run_uid]).to eq(first_two.last[:run_uid])
+    end
+
+    it "count_runs filters by process_name" do
+      bills = adapter.count_runs(process_name: "billing_recover")
+      leads = adapter.count_runs(process_name: "lead_pipeline")
+      expect(bills).to be >= 1
+      expect(leads).to be >= 2
+      expect(adapter.count_runs).to eq(bills + leads + adapter.count_runs(process_name: "ticket_triage"))
     end
   end
 

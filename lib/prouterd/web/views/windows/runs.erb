@@ -25,3 +25,37 @@
     <% end %>
   </tbody>
 </table>
+
+<%
+  base_query = +"limit=#{@limit}"
+  base_query << "&process=#{Rack::Utils.escape(@process_filter)}" if @process_filter
+  prev_offset = [@offset - @limit, 0].max
+  next_offset = @offset + @limit
+  last_offset = ((@total - 1) / @limit) * @limit
+  last_offset = 0 if last_offset.negative?
+  shown_from  = @runs.empty? ? 0 : @offset + 1
+  shown_to    = @offset + @runs.size
+%>
+<footer class="pagination">
+  <span class="pagination__info">
+    <% if @total.zero? %>
+      0 runs
+    <% else %>
+      runs <%= shown_from %>–<%= shown_to %> of <%= @total %><%= " · process: #{@process_filter}" if @process_filter %>
+    <% end %>
+  </span>
+  <span class="pagination__buttons">
+    <button type="button" class="pagination__btn"
+            <%= "disabled" if @offset == 0 %>
+            data-page-link="/windows/runs?<%= base_query %>&offset=0">first</button>
+    <button type="button" class="pagination__btn"
+            <%= "disabled" if @offset == 0 %>
+            data-page-link="/windows/runs?<%= base_query %>&offset=<%= prev_offset %>">prev</button>
+    <button type="button" class="pagination__btn"
+            <%= "disabled" if next_offset >= @total %>
+            data-page-link="/windows/runs?<%= base_query %>&offset=<%= next_offset %>">next</button>
+    <button type="button" class="pagination__btn"
+            <%= "disabled" if @offset >= last_offset %>
+            data-page-link="/windows/runs?<%= base_query %>&offset=<%= last_offset %>">last</button>
+  </span>
+</footer>

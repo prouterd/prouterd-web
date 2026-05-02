@@ -99,15 +99,17 @@ module Prouterd
         end
 
         def list_runs(filters = {})
-          rows = all_runs.values
-          if (proc_name = filters[:process_name] || filters[:process])
-            rows = rows.select { |r| r[:process_name] == proc_name }
+          rows = filtered_runs(filters).sort_by do |r|
+            -(r[:run_uid].sub(/\Arun_/, "").to_i(16) rescue 0)
           end
-          if (status = filters[:status])
-            rows = rows.select { |r| r[:status] == status }
-          end
-          rows.sort_by { |r| -(r[:run_uid].sub(/\Arun_/, "").to_i(16) rescue 0) }
-              .map { |r| run_summary(r) }
+
+          offset = (filters[:offset] || 0).to_i
+          limit  = (filters[:limit]  || 50).to_i
+          rows.drop(offset).first(limit).map { |r| run_summary(r) }
+        end
+
+        def count_runs(filters = {})
+          filtered_runs(filters).size
         end
 
         def get_run(run_uid)
@@ -306,6 +308,17 @@ module Prouterd
 
         def all_runs
           @runtime_mutex.synchronize { RUNS.merge(@runtime_runs) }
+        end
+
+        def filtered_runs(filters)
+          rows = all_runs.values
+          if (proc_name = filters[:process_name] || filters[:process])
+            rows = rows.select { |r| r[:process_name] == proc_name }
+          end
+          if (status = filters[:status])
+            rows = rows.select { |r| r[:status] == status }
+          end
+          rows
         end
 
         def synthesize_run(process_name:, interface_name:, trigger:, input_event:, blocks:, replay_of:, from_block: nil)

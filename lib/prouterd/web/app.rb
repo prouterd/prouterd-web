@@ -209,10 +209,15 @@ module Prouterd
           end
 
           r.get "runs" do
-            @runs = adapter.list_runs(
-              limit:  clamp_int(r.params["limit"],  default: 50,  min: 1, max: 500),
-              offset: clamp_int(r.params["offset"], default: 0,   min: 0, max: 1_000_000)
-            )
+            @limit  = clamp_int(r.params["limit"],  default: 50, min: 1, max: 500)
+            @offset = clamp_int(r.params["offset"], default: 0,  min: 0, max: 1_000_000)
+            @process_filter = r.params["process"].to_s.empty? ? nil : r.params["process"]
+
+            list_args = { limit: @limit, offset: @offset }
+            list_args[:process_name] = @process_filter if @process_filter
+
+            @runs  = adapter.list_runs(list_args)
+            @total = adapter.count_runs(list_args.reject { |k, _| %i[limit offset].include?(k) })
             render "windows/runs"
           end
 

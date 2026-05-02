@@ -636,6 +636,44 @@ button {
 .diff__row--ins .diff__text::before { content: "+ "; color: var(--ok); }
 .diff__row--ctx .diff__text::before { content: "  "; color: var(--fg-mute); }
 
+/* ----- pagination footer ----- */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+  font-size: 11px;
+  position: sticky;
+  bottom: 0;
+}
+.pagination__info {
+  color: var(--fg-mute);
+  margin-right: auto;
+}
+.pagination__buttons {
+  display: flex;
+  gap: 4px;
+}
+.pagination__btn {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.pagination__btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pagination__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* ----- inspector header actions ----- */
 .inspector-header__actions {
   display: flex;

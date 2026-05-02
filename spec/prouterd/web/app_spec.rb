@@ -99,13 +99,39 @@ RSpec.describe Prouterd::Web::App do
     end
 
     describe "GET /windows/runs" do
-      before { get "/windows/runs" }
-
       it "renders a runs table fragment" do
+        get "/windows/runs"
         expect(last_response.status).to eq(200)
         expect(last_response.body).to include('class="data-table"')
         expect(last_response.body).to include("run_18492")
         expect(last_response.body).not_to include("<!DOCTYPE")
+      end
+
+      it "renders a pagination footer with first / prev / next / last" do
+        get "/windows/runs?limit=2&offset=0"
+        body = last_response.body
+        expect(body).to include('class="pagination"')
+        expect(body).to include('data-page-link="/windows/runs?limit=2&offset=0"')  # first
+        expect(body).to include('data-page-link="/windows/runs?limit=2&offset=2"')  # next
+        expect(body).to include("of 3")  # mock has 3 fixture runs
+      end
+
+      it "disables prev/first on the first page and next/last on the last page" do
+        get "/windows/runs?limit=2&offset=0"
+        # On page 1 the disabled buttons are first/prev; next/last must be enabled.
+        expect(last_response.body).to match(/<button[^>]*disabled[^>]*>first/)
+        expect(last_response.body).to match(/<button[^>]*disabled[^>]*>prev/)
+
+        get "/windows/runs?limit=2&offset=2"
+        # On the last page next/last must be disabled.
+        expect(last_response.body).to match(/<button[^>]*disabled[^>]*>next/)
+        expect(last_response.body).to match(/<button[^>]*disabled[^>]*>last/)
+      end
+
+      it "filters by process and threads the filter through pagination links" do
+        get "/windows/runs?limit=10&offset=0&process=lead_pipeline"
+        expect(last_response.body).to include("process: lead_pipeline")
+        expect(last_response.body).to include("process=lead_pipeline")  # in pagination URLs
       end
     end
 
