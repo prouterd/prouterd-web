@@ -1,0 +1,16 @@
+<table class="kv-table">
+  <tbody>
+    <tr><td>Router</td>        <td><%= @status[:router] %></td></tr>
+    <tr><td>Healthy</td>       <td class="status-<%= @status[:healthy] ? "success" : "failed" %>"><%= @status[:healthy] ? "yes" : "no" %></td></tr>
+    <tr><td>Core version</td>  <td><%= @status[:core_version] %></td></tr>
+    <tr><td>Web version</td>   <td><%= @status[:web_version] %></td></tr>
+    <tr><td>Active config</td> <td>#<%= @status[:active_commit] || "—" %></td></tr>
+    <tr><td>Boot config</td>   <td>#<%= @status[:boot_commit] || "—" %></td></tr>
+    <tr><td>Config drift</td>  <td class="status-<%= @status[:config_drift] ? "retrying" : "success" %>"><%= @status[:config_drift] ? "yes" : "no" %></td></tr>
+    <tr><td>Workers</td>       <td><%= @status[:workers] %></td></tr>
+    <tr><td>Queue depth</td>   <td><%= @status[:queue_depth] %></td></tr>
+    <tr><td>Failed (1h)</td>   <td><%= @status[:failed_runs_last_hour] %></td></tr>
+    <tr><td>Uptime (s)</td>    <td><%= @status[:uptime_seconds] %></td></tr>
+    <tr><td>DB path</td>       <td><%= @status[:db_path] %></td></tr>
+  </tbody>
+</table>

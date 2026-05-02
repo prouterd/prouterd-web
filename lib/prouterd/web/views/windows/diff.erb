@@ -1,0 +1,9 @@
+<header class="inspector-header">
+  <div class="inspector-header__title">Diff: #<%= @left[:id] %> → #<%= @right[:id] %></div>
+  <div class="inspector-header__meta">
+    <span><b>left</b> #<%= @left[:id] %> (<%= @left[:short_checksum] %>) <%= @left[:message] || "" %></span>
+    <span><b>right</b> #<%= @right[:id] %> (<%= @right[:short_checksum] %>) <%= @right[:message] || "" %></span>
+  </div>
+</header>
+
+<%== render_diff(@diff_rows) %>

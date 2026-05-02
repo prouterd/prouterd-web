@@ -1,0 +1,27 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Attempts</th>
+      <th>Backoff</th>
+      <th>Initial delay</th>
+      <th>Max delay</th>
+      <th>Timeout</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @policies.each do |p| %>
+      <tr>
+        <td><%= p[:name] %></td>
+        <td><%= p[:retry_attempts] || "—" %></td>
+        <td><%= p[:retry_backoff] || "—" %></td>
+        <td><%= p[:retry_initial_delay_ms] ? "#{p[:retry_initial_delay_ms]} ms" : "—" %></td>
+        <td><%= p[:retry_max_delay_ms] ? "#{p[:retry_max_delay_ms]} ms" : "—" %></td>
+        <td><%= p[:timeout_ms] ? "#{p[:timeout_ms]} ms" : "—" %></td>
+      </tr>
+    <% end %>
+    <% if @policies.empty? %>
+      <tr><td colspan="6" class="data-table__empty">No retry policies defined.</td></tr>
+    <% end %>
+  </tbody>
+</table>

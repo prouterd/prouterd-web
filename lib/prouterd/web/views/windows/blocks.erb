@@ -1,0 +1,31 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Block</th>
+      <th>Process</th>
+      <th>Image</th>
+      <th>Input</th>
+      <th>Output</th>
+      <th>Timeout</th>
+      <th>Retry</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @blocks.each do |b| %>
+      <tr class="data-table__row--clickable"
+          data-open-window="process"
+          data-open-resource="<%= b[:process] %>">
+        <td><%= b[:name] %></td>
+        <td><%= b[:process] %></td>
+        <td><%= b[:image] || "—" %></td>
+        <td><%= b[:input] || "—" %></td>
+        <td><%= b[:output] || "—" %></td>
+        <td><%= b[:timeout_ms] ? "#{b[:timeout_ms]} ms" : "—" %></td>
+        <td><%= b[:retry_policy] || "—" %></td>
+      </tr>
+    <% end %>
+    <% if @blocks.empty? %>
+      <tr><td colspan="7" class="data-table__empty">No blocks defined.</td></tr>
+    <% end %>
+  </tbody>
+</table>

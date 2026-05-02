@@ -1,0 +1,119 @@
+<header class="inspector-header">
+  <div class="inspector-header__title">Config</div>
+  <div class="inspector-header__meta">
+    <span><b>active</b> #<%= @active && @active[:commit][:id] || "—" %></span>
+    <span><b>boot</b> #<%= @boot && @boot[:commit][:id] || "—" %></span>
+    <span><b>drift</b>
+      <span class="status-<%= @drift ? "retrying" : "success" %>"><%= @drift ? "yes" : "no" %></span>
+    </span>
+    <span><b>commits</b> <%= @commits.size %></span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" class="tab tab--active" data-tab="active">Active</button>
+  <button type="button" class="tab"             data-tab="boot">Boot</button>
+  <button type="button" class="tab"             data-tab="draft">Draft</button>
+  <button type="button" class="tab"             data-tab="diff">Diff</button>
+  <button type="button" class="tab"             data-tab="commits">Commits</button>
+</nav>
+
+<div class="tab-panel" data-tab-panel="active">
+  <% if @active.nil? %>
+    <div class="logs__empty">no active config</div>
+  <% else %>
+    <div class="config__header">
+      <span><b>commit</b> #<%= @active[:commit][:id] %></span>
+      <span><b>checksum</b> <%= @active[:commit][:short_checksum] %></span>
+      <span><b>author</b> <%= @active[:commit][:author] || "—" %></span>
+      <span><b>created</b> <%= @active[:commit][:created_at] %></span>
+      <% if @active[:commit][:message] %>
+        <span><b>message</b> <%= @active[:commit][:message] %></span>
+      <% end %>
+    </div>
+    <% if @drift %>
+      <div class="config__actions">
+        <button type="button" class="config__btn"
+                data-config-action="save-boot"
+                data-confirm="Save running config as the boot config?">
+          Save as boot config
+        </button>
+        <span class="config__hint">drift detected — boot will not match running until you save</span>
+      </div>
+    <% end %>
+    <pre class="config__pre"><%= @active[:rendered] %></pre>
+  <% end %>
+</div>
+
+<div class="tab-panel" data-tab-panel="boot" hidden>
+  <% if @boot.nil? %>
+    <div class="logs__empty">no boot config</div>
+  <% else %>
+    <div class="config__header">
+      <span><b>commit</b> #<%= @boot[:commit][:id] %></span>
+      <span><b>checksum</b> <%= @boot[:commit][:short_checksum] %></span>
+      <span><b>author</b> <%= @boot[:commit][:author] || "—" %></span>
+      <span><b>created</b> <%= @boot[:commit][:created_at] %></span>
+      <% if @boot[:commit][:message] %>
+        <span><b>message</b> <%= @boot[:commit][:message] %></span>
+      <% end %>
+    </div>
+    <pre class="config__pre"><%= @boot[:rendered] %></pre>
+  <% end %>
+</div>
+
+<div class="tab-panel" data-tab-panel="draft" hidden>
+  <div class="logs__empty">No draft session — draft editing is read-only in MVP (spec §27.3).</div>
+</div>
+
+<div class="tab-panel" data-tab-panel="diff" hidden>
+  <% if @diff_rows.nil? %>
+    <div class="logs__empty">no diff available (need both active and boot)</div>
+  <% else %>
+    <div class="config__header">
+      <span><b>left</b> #<%= @boot[:commit][:id] %> (boot)</span>
+      <span><b>right</b> #<%= @active[:commit][:id] %> (active)</span>
+    </div>
+    <%== render_diff(@diff_rows) %>
+  <% end %>
+</div>
+
+<div class="tab-panel" data-tab-panel="commits" hidden>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Commit</th>
+        <th>Author</th>
+        <th>Message</th>
+        <th>Checksum</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @commits.each do |c| %>
+        <tr>
+          <td>#<%= c[:id] %></td>
+          <td><%= c[:author] || "—" %></td>
+          <td><%= c[:message] || "—" %></td>
+          <td class="artifacts__checksum"><%= c[:short_checksum] %></td>
+          <td><%= c[:created_at] %></td>
+          <td>
+            <% if @active && c[:id] != @active[:commit][:id] %>
+              <a href="#" data-open-window="diff" data-open-resource="<%= c[:id] %>/<%= @active[:commit][:id] %>">diff vs active</a>
+              ·
+              <a href="#" data-config-action="rollback"
+                 data-commit-id="<%= c[:id] %>"
+                 data-confirm="Rollback running config to commit #<%= c[:id] %>?">rollback</a>
+            <% else %>
+              <span class="status-success">active</span>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+      <% if @commits.empty? %>
+        <tr><td colspan="6" class="data-table__empty">No commits yet.</td></tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

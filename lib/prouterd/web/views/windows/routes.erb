@@ -1,0 +1,25 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>From</th>
+      <th>To</th>
+      <th>Condition</th>
+      <th>On failure</th>
+      <th>Enabled</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @routes.each do |r| %>
+      <tr>
+        <td><%= r[:from] %></td>
+        <td><%= r[:to] %></td>
+        <td><%= r[:condition] || "—" %></td>
+        <td><%= r[:on_failure] || "—" %></td>
+        <td><%= r[:enabled] ? "yes" : "no" %></td>
+      </tr>
+    <% end %>
+    <% if @routes.empty? %>
+      <tr><td colspan="5" class="data-table__empty">No routes configured.</td></tr>
+    <% end %>
+  </tbody>
+</table>

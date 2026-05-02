@@ -1,0 +1,21 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Concurrency</th>
+      <th>Timeout</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @queues.each do |q| %>
+      <tr>
+        <td><%= q[:name] %></td>
+        <td><%= q[:concurrency] || "—" %></td>
+        <td><%= q[:timeout_ms] ? "#{q[:timeout_ms]} ms" : "—" %></td>
+      </tr>
+    <% end %>
+    <% if @queues.empty? %>
+      <tr><td colspan="3" class="data-table__empty">No queues defined.</td></tr>
+    <% end %>
+  </tbody>
+</table>

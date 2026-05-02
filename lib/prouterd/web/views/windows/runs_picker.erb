@@ -1,0 +1,37 @@
+<header class="inspector-header">
+  <div class="inspector-header__title">
+    <%= @kind == "logs" ? "Logs" : "Artifacts" %> · pick a run
+  </div>
+  <div class="inspector-header__meta">
+    <span><b>recent runs</b> <%= @runs.size %></span>
+    <span class="window-placeholder__hint">click a row to open this run's <%= @kind %> window</span>
+  </div>
+</header>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Run</th>
+      <th>Process</th>
+      <th>Status</th>
+      <th>Started</th>
+      <th>Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @runs.each do |r| %>
+      <tr class="data-table__row--clickable"
+          data-open-window="<%= @kind %>"
+          data-open-resource="<%= r[:run_uid] %>">
+        <td><%= r[:run_uid] %></td>
+        <td><%= r[:process_name] %></td>
+        <td class="status-<%= r[:status] %>"><%= r[:status] %></td>
+        <td><%= r[:started_at] || "—" %></td>
+        <td><%= r[:duration_ms] ? "#{r[:duration_ms]} ms" : "—" %></td>
+      </tr>
+    <% end %>
+    <% if @runs.empty? %>
+      <tr><td colspan="5" class="data-table__empty">No runs yet.</td></tr>
+    <% end %>
+  </tbody>
+</table>

@@ -1,0 +1,21 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Kind</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @interfaces.each do |i| %>
+      <tr>
+        <td><%= i[:name] %></td>
+        <td><%= i[:kind] %></td>
+        <td class="status-<%= i[:status] %>"><%= i[:status] %></td>
+      </tr>
+    <% end %>
+    <% if @interfaces.empty? %>
+      <tr><td colspan="3" class="data-table__empty">No interfaces configured.</td></tr>
+    <% end %>
+  </tbody>
+</table>

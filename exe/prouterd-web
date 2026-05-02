@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "prouterd/web"
+require "rackup"
+
+options = {
+  host:        "127.0.0.1",
+  port:        9292,
+  db:          nil,
+  mock:        nil,
+  admin_token: ENV["PROUTERD_WEB_ADMIN_TOKEN"]
+}
+
+OptionParser.new do |o|
+  o.banner = "Usage: prouterd-web [options]"
+  o.on("-pPORT", "--port=PORT", Integer)               { |v| options[:port] = v }
+  o.on("-HHOST", "--host=HOST", String)                { |v| options[:host] = v }
+  o.on("--db=PATH", String, "Path to prouterd SQLite")  { |v| options[:db]   = v }
+  o.on("--mock", "Force in-memory mock adapter")       { options[:mock] = true }
+  o.on("--admin-token=TOKEN", String, "Token required to sign in (env: PROUTERD_WEB_ADMIN_TOKEN)") do |v|
+    options[:admin_token] = v
+  end
+  o.on("--admin-token-env=VAR", String, "Read admin token from env var") do |v|
+    options[:admin_token] = ENV[v]
+  end
+  o.on_tail("-v", "--version") { puts Prouterd::Web::VERSION; exit }
+  o.on_tail("-h", "--help")    { puts o; exit }
+end.parse!
+
+use_mock = options[:mock] || options[:db].nil?
+
+adapter =
+  if use_mock
+    Prouterd::Web::Adapters::MockAdapter.new
+  else
+    Prouterd::Web::Adapters::SqliteAdapter.new(db_path: options[:db])
+  end
+
+app = Prouterd::Web::App.with_adapter(adapter, auth_token: options[:admin_token])
+
+handler = Rackup::Handler.get("puma")
+warn "prouterd-web #{Prouterd::Web::VERSION} on http://#{options[:host]}:#{options[:port]}"
+warn "  adapter: #{adapter.class.name}#{options[:db] ? " (#{options[:db]})" : ""}"
+warn "  auth:    #{options[:admin_token] ? "enabled" : "DISABLED — set --admin-token for production"}"
+
+handler.run(app, Host: options[:host], Port: options[:port])

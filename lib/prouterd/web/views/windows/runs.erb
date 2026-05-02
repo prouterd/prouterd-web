@@ -1,0 +1,27 @@
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Run</th>
+      <th>Process</th>
+      <th>Status</th>
+      <th>Duration</th>
+      <th>Started</th>
+      <th>Trigger</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @runs.each do |r| %>
+      <tr class="data-table__row--clickable" data-open-window="run" data-open-resource="<%= r[:run_uid] %>">
+        <td><%= r[:run_uid] %></td>
+        <td><%= r[:process_name] %></td>
+        <td class="status-<%= r[:status] %>"><%= r[:status] %></td>
+        <td><%= r[:duration_ms] ? "#{r[:duration_ms]} ms" : "—" %></td>
+        <td><%= r[:started_at] || "—" %></td>
+        <td><%= r[:trigger] || "—" %></td>
+      </tr>
+    <% end %>
+    <% if @runs.empty? %>
+      <tr><td colspan="6" class="data-table__empty">No runs yet.</td></tr>
+    <% end %>
+  </tbody>
+</table>

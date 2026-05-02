@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Prouterd Web Console</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body class="login-page">
+  <main class="login">
+    <h1 class="login__title">Process Router</h1>
+    <p class="login__subtitle">Web Console</p>
+
+    <% if @login_error %>
+      <div class="login__error"><%= @login_error %></div>
+    <% end %>
+
+    <form method="post" action="/login" class="login__form">
+      <label for="login-token" class="login__label">Admin token</label>
+      <input
+        id="login-token"
+        type="password"
+        name="token"
+        autocomplete="off"
+        autofocus
+        required
+        class="login__input"
+      >
+      <button type="submit" class="login__btn">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

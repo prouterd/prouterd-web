@@ -1,0 +1,27 @@
+<header class="inspector-header">
+  <div class="inspector-header__title">Context: <%= @run_uid %></div>
+  <div class="inspector-header__meta">
+    <span><a href="#" data-open-window="run" data-open-resource="<%= @run_uid %>">open run inspector</a></span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" class="tab tab--active" data-tab="context">Context</button>
+  <button type="button" class="tab"             data-tab="event">Input event</button>
+</nav>
+
+<div class="tab-panel" data-tab-panel="context">
+  <% if @ctx[:context].nil? %>
+    <div class="logs__empty">empty context</div>
+  <% else %>
+    <%== render_json(@ctx[:context]) %>
+  <% end %>
+</div>
+
+<div class="tab-panel" data-tab-panel="event" hidden>
+  <% if @ctx[:input_event].nil? %>
+    <div class="logs__empty">no input event</div>
+  <% else %>
+    <%== render_json(@ctx[:input_event]) %>
+  <% end %>
+</div>

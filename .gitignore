@@ -1,0 +1,23 @@
+/.bundle/
+/vendor/bundle/
+/coverage/
+/tmp/
+/var/
+/pkg/
+/log/
+
+*.gem
+*.rbc
+.rspec_status
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local
+/.env
+/.env.*
+!/.env.example

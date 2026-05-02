@@ -1,0 +1,115 @@
+<header class="inspector-header">
+  <div class="inspector-header__title">Process: <%= @process[:name] %></div>
+  <div class="inspector-header__meta">
+    <span><b>status</b> <span class="status-<%= @process[:status] %>"><%= @process[:status] %></span></span>
+    <span><b>queue</b> <%= @process[:queue] || "—" %></span>
+    <span><b>entry</b> <%= @process[:entry_block] || "—" %></span>
+    <span><b>blocks</b> <%= @process[:blocks].size %></span>
+    <span><b>routes</b> <%= @process[:routes].size %></span>
+    <span><b>last run</b> <span class="status-<%= @process[:last_status] %>"><%= @process[:last_status] || "—" %></span></span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button type="button" class="tab tab--active" data-tab="overview">Overview</button>
+  <button type="button" class="tab"             data-tab="blocks">Blocks</button>
+  <button type="button" class="tab"             data-tab="routes">Routes</button>
+  <button type="button" class="tab"             data-tab="trigger">Trigger</button>
+</nav>
+
+<div class="tab-panel" data-tab-panel="overview">
+  <table class="kv-table">
+    <tbody>
+      <tr><td>Name</td>        <td><%= @process[:name] %></td></tr>
+      <tr><td>Description</td> <td><%= @process[:description] || "—" %></td></tr>
+      <tr><td>Status</td>      <td class="status-<%= @process[:status] %>"><%= @process[:status] %></td></tr>
+      <tr><td>Queue</td>       <td><%= @process[:queue] || "—" %></td></tr>
+      <tr><td>Entry block</td> <td><%= @process[:entry_block] || "—" %></td></tr>
+      <tr><td>Blocks</td>      <td><%= @process[:blocks].size %></td></tr>
+      <tr><td>Routes</td>      <td><%= @process[:routes].size %></td></tr>
+      <tr><td>Last status</td> <td class="status-<%= @process[:last_status] %>"><%= @process[:last_status] || "—" %></td></tr>
+      <% if @process[:success_rate] %>
+        <tr><td>Success rate</td> <td><%= "%.1f%%" % (@process[:success_rate] * 100) %></td></tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<div class="tab-panel" data-tab-panel="blocks" hidden>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Block</th>
+        <th>Image</th>
+        <th>Input</th>
+        <th>Output</th>
+        <th>Timeout</th>
+        <th>Retry</th>
+        <th>Secrets</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @process[:blocks].each do |b| %>
+        <tr>
+          <td><%= b[:name] %></td>
+          <td><%= b[:image] || "—" %></td>
+          <td><%= b[:input] || "—" %></td>
+          <td><%= b[:output] || "—" %></td>
+          <td><%= b[:timeout_ms] ? "#{b[:timeout_ms]} ms" : "—" %></td>
+          <td><%= b[:retry_policy] || "—" %></td>
+          <td><%= b[:secrets].any? ? b[:secrets].join(", ") : "—" %></td>
+        </tr>
+      <% end %>
+      <% if @process[:blocks].empty? %>
+        <tr><td colspan="7" class="data-table__empty">No blocks defined.</td></tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
+
+<div class="tab-panel" data-tab-panel="trigger" hidden>
+  <form class="trigger-form" data-trigger-process="<%= @process[:name] %>">
+    <p class="trigger-form__hint">Send a one-shot input event into <code><%= @process[:name] %></code>. The event is delivered as if it had arrived through the matching interface.</p>
+    <label class="trigger-form__label">Input event JSON</label>
+    <textarea class="trigger-form__input"
+              spellcheck="false"
+              autocomplete="off"
+              rows="10">{
+  "type": "lead.created",
+  "body": {}
+}</textarea>
+    <div class="trigger-form__actions">
+      <button type="button" class="action__btn" data-trigger-action="validate">validate JSON</button>
+      <button type="button" class="action__btn action__btn--primary" data-trigger-action="trigger">trigger</button>
+    </div>
+    <div class="trigger-form__status" aria-live="polite"></div>
+  </form>
+</div>
+
+<div class="tab-panel" data-tab-panel="routes" hidden>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>From</th>
+        <th>To</th>
+        <th>Condition</th>
+        <th>On failure</th>
+        <th>Enabled</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @process[:routes].each do |r| %>
+        <tr>
+          <td><%= r[:from] %></td>
+          <td><%= r[:to] %></td>
+          <td><%= r[:condition] || "—" %></td>
+          <td><%= r[:on_failure] || "—" %></td>
+          <td><%= r[:enabled] ? "yes" : "no" %></td>
+        </tr>
+      <% end %>
+      <% if @process[:routes].empty? %>
+        <tr><td colspan="5" class="data-table__empty">No routes defined.</td></tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
