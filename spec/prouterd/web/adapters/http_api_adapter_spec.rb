@@ -163,6 +163,15 @@ RSpec.describe Prouterd::Web::Adapters::HttpApiAdapter do
       expect(runs.first).to include(run_uid: "run_1", process_name: "p", config_commit: 42, trigger: "cli")
     end
 
+    it "list_runs surfaces replay_of from the daemon's resolved replay_of_uid field" do
+      stub.runs["run_replayed"] = {
+        uid: "run_replayed", process_name: "p", status: "success",
+        commit_id: 42, replay_of: 1, replay_of_uid: "run_1"
+      }
+      run = adapter.list_runs.find { |r| r[:run_uid] == "run_replayed" }
+      expect(run[:replay_of]).to eq("run_1")
+    end
+
     it "get_run merges in :replayable based on terminal status" do
       r = adapter.get_run("run_1")
       expect(r[:replayable]).to be true

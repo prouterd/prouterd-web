@@ -3,16 +3,12 @@ require "json"
 module Prouterd
   module Web
     module Adapters
-      # CoreAdapter implementation that talks to the prouterd daemon's /v1
-      # HTTP API. The shape returned to UI code matches what SqliteAdapter
-      # and MockAdapter return — view templates and the WindowManager
-      # don't care which adapter is wired.
-      #
-      # Live updates and CLI command execution don't go through this
-      # class: EventsConsumer connects WS /v1/events, CliBridge connects
-      # WS /v1/cli/:session_id. Both publish into the same Broadcaster
-      # this adapter knows nothing about.
-      class HttpApiAdapter < CoreAdapter
+      # Sole adapter — talks to the prouterd daemon's /v1 HTTP API and
+      # shapes responses into the hashes view templates / WindowManager
+      # consume. Live event push and CLI command streaming live in
+      # EventsConsumer (WS /v1/events) and CliBridge (WS /v1/cli/:sid)
+      # respectively; this class handles only the request/response surface.
+      class HttpApiAdapter
         attr_reader :client
 
         def initialize(client:, router_name: nil)
@@ -404,10 +400,9 @@ module Prouterd
             finished_at:   r["finished_at"],
             config_commit: r["commit_id"],
             trigger:       r["interface_name"],
-            replay_of:     nil  # /v1 exposes the numeric replay_of_run_id;
-                                # resolving to uid would need an extra round
-                                # trip per row, deferred until /v1 grows
-                                # `replay_of_uid` server-side.
+            replay_of:     r["replay_of_uid"]  # human-friendly uid; daemon
+                                               # >= core@880d9d6 surfaces it
+                                               # via run_summary's LEFT JOIN.
           }
         end
 

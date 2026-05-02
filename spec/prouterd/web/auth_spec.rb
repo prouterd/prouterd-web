@@ -3,7 +3,15 @@ require "spec_helper"
 RSpec.describe "auth (Phase UI-9)" do
   include Rack::Test::Methods
 
-  let(:adapter) { Prouterd::Web::Adapters::MockAdapter.new }
+  let(:stub_and_adapter) do
+    stub      = Prouterd::Web::Specs::StubCoreApp.new
+    seed_demo_stub(stub)
+    transport = Prouterd::Web::Specs::RackTestTransport.new(stub)
+    client    = Prouterd::Web::CoreClient.new(base_url: "http://stub", transport: transport)
+    adapter   = Prouterd::Web::Adapters::HttpApiAdapter.new(client: client)
+    [stub, adapter]
+  end
+  let(:adapter) { stub_and_adapter.last }
 
   describe "with auth_token configured" do
     let(:token) { "s3cret-token" }
@@ -103,6 +111,15 @@ RSpec.describe "auth (Phase UI-9)" do
       expect(last_response.headers["X-Content-Type-Options"]).to eq("nosniff")
       expect(last_response.headers["X-Frame-Options"]).to eq("DENY")
       expect(last_response.headers["Referrer-Policy"]).to eq("same-origin")
+    end
+
+    it "sets a strict Content-Security-Policy" do
+      get "/console"
+      csp = last_response.headers["Content-Security-Policy"]
+      expect(csp).to include("default-src 'self'")
+      expect(csp).to include("script-src 'self'")
+      expect(csp).to include("connect-src 'self' ws: wss:")
+      expect(csp).to include("frame-ancestors 'none'")
     end
   end
 end

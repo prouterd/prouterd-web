@@ -17,7 +17,9 @@ Gem::Specification.new do |spec|
   spec.executables = ["prouterd-web"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "prouterd", ">= 0.1.0"
+  # The console talks to the prouterd daemon over HTTP /v1 + WS /v1/events
+  # /v1/cli — no Ruby gem coupling. Install on a separate host and point
+  # at the daemon with `prouterd-web --core-url`.
   spec.add_dependency "roda",    "~> 3.85"
   spec.add_dependency "rack",    "~> 3.0"
   spec.add_dependency "rackup",  "~> 2.1"

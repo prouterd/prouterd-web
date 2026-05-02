@@ -130,6 +130,44 @@ RSpec.describe Prouterd::Web::CliBridge do
     end
   end
 
+  describe "persistent connection" do
+    it "reuses the same WS for subsequent commands within a session" do
+      factory_calls = 0
+      reusing_factory = lambda do |_url, _headers|
+        factory_calls += 1
+        client
+      end
+      b = described_class.new(
+        core_url:       "http://core:9000",
+        token:          "secret",
+        client_factory: reusing_factory,
+        timeout:        2.0
+      )
+
+      Thread.new do
+        sleep 0.01
+        client.fire(:open)
+        client.fire_message(JSON.dump(type: "command.complete", payload: { exit_code: 0, prompt: "x" }))
+      end
+      first = b.dispatch("cmd1", session_id: "sid-1")
+      expect(first[:exit_code]).to eq(0)
+      expect(factory_calls).to eq(1)
+
+      # Second dispatch on the same session should NOT open a new client.
+      Thread.new do
+        sleep 0.01
+        client.fire_message(JSON.dump(type: "command.complete", payload: { exit_code: 0, prompt: "x" }))
+      end
+      second = b.dispatch("cmd2", session_id: "sid-1")
+      expect(second[:exit_code]).to eq(0)
+      expect(factory_calls).to eq(1)   # still 1 — connection reused
+
+      # Two command.exec frames should have been sent on the same client.
+      types = client.sent.map { |s| JSON.parse(s)["type"] }
+      expect(types).to eq(["command.exec", "command.exec"])
+    end
+  end
+
   describe "URL construction" do
     it "swaps http→ws and embeds the session_id in the path" do
       captured = nil

@@ -45,19 +45,23 @@ module Prouterd
       plugin :common_logger if ENV["RACK_ENV"] != "test"
 
       class << self
-        attr_accessor :adapter, :broadcaster, :events_consumer, :auth_token_digest
+        attr_accessor :adapter, :broadcaster, :events_consumer, :cli_bridge, :auth_token_digest
 
-        # Build a configured subclass for an adapter. The `events_consumer`
-        # parameter is optional: when running against an HttpApiAdapter,
-        # caller passes an EventsConsumer wired to the daemon's WS /v1/events
-        # so live updates flow through. SqliteAdapter / MockAdapter modes
-        # leave it nil (no live updates — content stays static between
-        # browser-driven re-fetches).
-        def with_adapter(adapter, auth_token: nil, events_consumer: nil)
+        # Build a configured subclass for an adapter.
+        #
+        # `events_consumer` (optional): WS /v1/events client. When wired,
+        # live events from core fan into our local Broadcaster and out to
+        # browser WS subscribers. nil → no live updates.
+        #
+        # `cli_bridge` (optional): WS /v1/cli/:sid forwarder. When wired,
+        # browser command.exec frames go through the bridge to core.
+        # nil → falls back to adapter#execute_cli_command (in-process).
+        def with_adapter(adapter, auth_token: nil, events_consumer: nil, cli_bridge: nil)
           klass = Class.new(self)
           klass.adapter           = adapter
           klass.broadcaster       = events_consumer&.broadcaster || Broadcaster.new
           klass.events_consumer   = events_consumer
+          klass.cli_bridge        = cli_bridge
           klass.auth_token_digest = auth_token && !auth_token.empty? ? digest_token(auth_token) : nil
           klass
         end
@@ -176,13 +180,19 @@ module Prouterd
               next "broadcaster not configured"
             end
 
-            ws       = Faye::WebSocket.new(env)
-            cmd_exec = ->(cmd, session_id:) { adapter.execute_cli_command(cmd, session_id: session_id) }
-            conn     = WebSocketConnection.new(
+            ws         = Faye::WebSocket.new(env)
+            cli_bridge = self.class.cli_bridge
+            cmd_exec   =
+              if cli_bridge
+                ->(cmd, session_id:) { cli_bridge.dispatch(cmd, session_id: session_id) }
+              else
+                ->(cmd, session_id:) { adapter.execute_cli_command(cmd, session_id: session_id) }
+              end
+            conn = WebSocketConnection.new(
               ws,
-              broadcaster:     broadcaster,
+              broadcaster:      broadcaster,
               command_executor: cmd_exec,
-              events_consumer: self.class.events_consumer
+              events_consumer:  self.class.events_consumer
             )
             ws.on(:open)    { conn.on_open }
             ws.on(:message) { |event| conn.on_message(event.data) }
@@ -476,6 +486,19 @@ module Prouterd
         resp["X-Content-Type-Options"] = "nosniff"
         resp["X-Frame-Options"]        = "DENY"
         resp["Referrer-Policy"]        = "same-origin"
+        # Strict CSP. UI's JS is event-delegation only (no inline `onclick`),
+        # styles live in app.css, the WS connects back to same origin only.
+        # `style-src` allows inline because we set a few `style="..."`
+        # attributes on dynamically-created window elements.
+        resp["Content-Security-Policy"] =
+          "default-src 'self'; " \
+          "script-src 'self'; " \
+          "style-src 'self' 'unsafe-inline'; " \
+          "img-src 'self' data:; " \
+          "connect-src 'self' ws: wss:; " \
+          "frame-ancestors 'none'; " \
+          "base-uri 'self'; " \
+          "form-action 'self'"
       end
 
       def auth_enabled?

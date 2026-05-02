@@ -61,7 +61,12 @@ module Prouterd
           path = request.path_info
           method = request.request_method
 
-          return [200, json_headers, [JSON.dump(@status_payload)]] if method == "GET" && path == "/v1/status"
+          if method == "GET" && path == "/v1/status"
+            payload = @status_payload.dup
+            payload["running_commit"] = @running_commit_id unless @running_commit_id.nil?
+            payload["startup_commit"] = @startup_commit_id unless @startup_commit_id.nil?
+            return [200, json_headers, [JSON.dump(payload)]]
+          end
 
           if @token
             header = env["HTTP_AUTHORIZATION"].to_s
@@ -110,6 +115,16 @@ module Prouterd
 
             @triggered_runs << { name: segments[2], body: parse_json(request) }
             uid = "run_stub_#{@triggered_runs.size}"
+            # Add to @runs so subsequent /v1/runs/:uid look-ups succeed (used
+            # by GET run inspector + POST cancel after trigger).
+            @runs[uid] = {
+              uid: uid, process_name: segments[2],
+              status: "queued", interface_name: nil,
+              commit_id: @running_commit_id, replay_of: nil,
+              started_at: nil, finished_at: nil, duration_ms: nil,
+              created_at: Time.now.utc.iso8601(3),
+              steps: []
+            }
             return json_response(202, data: { run_id: uid, status: "queued" })
           end
           if method == "GET" && segments.length == 3 && segments[0..1] == %w[v1 runs]

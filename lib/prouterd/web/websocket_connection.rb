@@ -177,7 +177,9 @@ module Prouterd
         # Spec §14 examples don't carry `topic` on event frames, but we add
         # it as a top-level field so the client can dispatch deterministically
         # without inferring topics from `type` + payload shape.
-        type = payload.is_a?(Hash) ? (payload[:type] || payload["type"]) : nil
+        # Convention: payloads on the local Broadcaster carry string keys
+        # (matches the wire format from /v1/events JSON parse).
+        type = payload.is_a?(Hash) ? payload["type"] : nil
         send_raw(
           topic:   topic,
           type:    type,

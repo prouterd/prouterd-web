@@ -60,12 +60,12 @@ RSpec.describe Prouterd::Web::WebSocketConnection do
       conn.on_message(JSON.dump(id: "m1", type: "subscribe", payload: { topic: "runs" }))
       socket.sent.clear  # drop the hello/ack frames
 
-      broadcaster.publish("runs", { type: "run.updated", run: { run_uid: "run_42" } })
+      broadcaster.publish("runs", { "type" => "run.updated", "run" => { "uid" => "run_42" } })
 
       msg = last_sent_msg
       expect(msg["topic"]).to eq("runs")
       expect(msg["type"]).to eq("run.updated")
-      expect(msg.dig("payload", "run", "run_uid")).to eq("run_42")
+      expect(msg.dig("payload", "run", "uid")).to eq("run_42")
     end
   end
 

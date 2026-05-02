@@ -3,8 +3,15 @@ require "spec_helper"
 RSpec.describe Prouterd::Web::App do
   include Rack::Test::Methods
 
-  let(:adapter) { Prouterd::Web::Adapters::MockAdapter.new }
-  let(:app)     { Prouterd::Web::App.with_adapter(adapter) }
+  let(:stub) do
+    s = Prouterd::Web::Specs::StubCoreApp.new
+    seed_demo_stub(s)
+    s
+  end
+  let(:transport) { Prouterd::Web::Specs::RackTestTransport.new(stub) }
+  let(:client)    { Prouterd::Web::CoreClient.new(base_url: "http://stub", transport: transport) }
+  let(:adapter)   { Prouterd::Web::Adapters::HttpApiAdapter.new(client: client) }
+  let(:app)       { Prouterd::Web::App.with_adapter(adapter) }
 
   describe "GET /" do
     it "redirects to /console" do
@@ -49,7 +56,7 @@ RSpec.describe Prouterd::Web::App do
       payload = JSON.parse(last_response.body)
       expect(payload["ok"]).to be true
       expect(payload["web_version"]).to eq(Prouterd::Web::VERSION)
-      expect(payload["adapter"]).to eq("Prouterd::Web::Adapters::MockAdapter")
+      expect(payload["adapter"]).to eq("Prouterd::Web::Adapters::HttpApiAdapter")
     end
   end
 
@@ -145,7 +152,11 @@ RSpec.describe Prouterd::Web::App do
       it "GET /windows/routes lists routes" do
         get "/windows/routes"
         expect(last_response.status).to eq(200)
-        expect(last_response.body).to include("@interface:leads_in")
+        # /v1 doesn't expose a separate global-routes list, so the UI flattens
+        # process routes only — the per-process `from` → `to` block edges.
+        expect(last_response.body).to include('class="data-table"')
+        expect(last_response.body).to include("extract")
+        expect(last_response.body).to include("enrich")
       end
 
       it "GET /windows/blocks flattens blocks across processes with process drill-down" do
@@ -306,19 +317,12 @@ RSpec.describe Prouterd::Web::App do
       end
 
       it "redacts sensitive keys (Authorization, etc.) when rendering input events" do
-        adapter.instance_variable_get(:@runtime_runs)["run_redact"] = {
-          run_uid: "run_redact", process_name: "lead_pipeline", status: "success",
-          started_at: nil, finished_at: nil, duration_ms: nil,
-          config_commit: 42, trigger: "webhook", interface_name: "leads_in",
-          replay_of: nil, replayable: true, error_summary: nil,
+        stub.runs["run_redact"] = {
+          uid: "run_redact", process_name: "lead_pipeline", status: "success",
+          input_event_json: '{"headers":{"Authorization":"Bearer SUPERSECRET","x-trace":"ok"}}',
+          context_json: "{}",
           steps: []
         }
-        # Inject a context with an authorization header
-        stub = adapter.method(:get_run_context)
-        allow(adapter).to receive(:get_run_context).with("run_redact").and_return({
-          input_event: { "headers" => { "Authorization" => "Bearer SUPERSECRET", "x-trace" => "ok" } },
-          context: {}
-        })
 
         get "/windows/context/run_redact"
         expect(last_response.status).to eq(200)
