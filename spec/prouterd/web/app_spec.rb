@@ -446,6 +446,41 @@ RSpec.describe Prouterd::Web::App do
     end
   end
 
+  describe "GET /windows/trace" do
+    it "renders the trace event form" do
+      get "/windows/trace"
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include("Trace event")
+      expect(last_response.body).to include('data-trace-event')
+      expect(last_response.body).to include('data-trace-action="trace"')
+    end
+  end
+
+  describe "POST /actions/trace" do
+    it "calls adapter.trace_event and wraps the result" do
+      allow(adapter).to receive(:trace_event).with(
+        { "type" => "lead.created" }, interface_name: "leads_in"
+      ).and_return("process" => "lead_pipeline", "graph" => [])
+
+      post "/actions/trace",
+        JSON.dump(event: { "type" => "lead.created" }, interface_name: "leads_in"),
+        { "CONTENT_TYPE" => "application/json" }
+
+      expect(last_response.status).to eq(200)
+      payload = JSON.parse(last_response.body)
+      expect(payload["ok"]).to be true
+      expect(payload["data"]["process"]).to eq("lead_pipeline")
+    end
+
+    it "400s on adapter error result" do
+      allow(adapter).to receive(:trace_event).and_return(error: "no such interface")
+
+      post "/actions/trace", "{}", { "CONTENT_TYPE" => "application/json" }
+      expect(last_response.status).to eq(400)
+      expect(JSON.parse(last_response.body)["error"]).to eq("no such interface")
+    end
+  end
+
   describe "POST /actions/runs/trigger/:process_name" do
     it "creates a new run and returns its uid" do
       post "/actions/runs/trigger/lead_pipeline",

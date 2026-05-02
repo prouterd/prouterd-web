@@ -45,19 +45,20 @@ module Prouterd
       plugin :common_logger if ENV["RACK_ENV"] != "test"
 
       class << self
-        attr_accessor :adapter, :broadcaster, :poller, :auth_token_digest
+        attr_accessor :adapter, :broadcaster, :events_consumer, :auth_token_digest
 
-        def with_adapter(adapter, start_poller: !rack_test_env?, auth_token: nil)
+        # Build a configured subclass for an adapter. The `events_consumer`
+        # parameter is optional: when running against an HttpApiAdapter,
+        # caller passes an EventsConsumer wired to the daemon's WS /v1/events
+        # so live updates flow through. SqliteAdapter / MockAdapter modes
+        # leave it nil (no live updates — content stays static between
+        # browser-driven re-fetches).
+        def with_adapter(adapter, auth_token: nil, events_consumer: nil)
           klass = Class.new(self)
           klass.adapter           = adapter
-          klass.broadcaster       = Broadcaster.new
+          klass.broadcaster       = events_consumer&.broadcaster || Broadcaster.new
+          klass.events_consumer   = events_consumer
           klass.auth_token_digest = auth_token && !auth_token.empty? ? digest_token(auth_token) : nil
-
-          if start_poller
-            klass.poller = Poller.new(adapter: adapter, broadcaster: klass.broadcaster)
-            klass.poller.start
-          end
-
           klass
         end
 
@@ -177,7 +178,12 @@ module Prouterd
 
             ws       = Faye::WebSocket.new(env)
             cmd_exec = ->(cmd, session_id:) { adapter.execute_cli_command(cmd, session_id: session_id) }
-            conn     = WebSocketConnection.new(ws, broadcaster: broadcaster, command_executor: cmd_exec)
+            conn     = WebSocketConnection.new(
+              ws,
+              broadcaster:     broadcaster,
+              command_executor: cmd_exec,
+              events_consumer: self.class.events_consumer
+            )
             ws.on(:open)    { conn.on_open }
             ws.on(:message) { |event| conn.on_message(event.data) }
             ws.on(:close)   { conn.on_close }
@@ -332,6 +338,10 @@ module Prouterd
             render "windows/cli"
           end
 
+          r.get "trace" do
+            render "windows/trace"
+          end
+
           r.get "config" do
             @active   = adapter.active_config
             @boot     = adapter.boot_config
@@ -382,6 +392,20 @@ module Prouterd
                 response.status = 400
                 { ok: false, error: "no active config to save" }
               end
+            end
+          end
+
+          r.post "trace" do
+            body = parse_json_body(r)
+            event = body["event"] || body["input_event"] || {}
+            iface = body["interface_name"] || body["interface"]
+            iface = nil if iface.is_a?(String) && iface.empty?
+            result = adapter.trace_event(event, interface_name: iface)
+            if result.is_a?(Hash) && result[:error]
+              response.status = 400
+              { ok: false, error: result[:error] }
+            else
+              { ok: true, data: result }
             end
           end
 

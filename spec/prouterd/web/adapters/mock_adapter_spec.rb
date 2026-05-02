@@ -214,7 +214,7 @@ RSpec.describe Prouterd::Web::Adapters::MockAdapter do
 
   describe "an unimplemented method" do
     it "raises NotImplementedYet from the base class" do
-      expect { adapter.trace_event({}, interface_name: "leads_in") }
+      expect { adapter.get_step_context_before("run_18492", 4) }
         .to raise_error(Prouterd::Web::CoreAdapter::NotImplementedYet)
     end
   end

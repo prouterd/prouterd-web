@@ -636,6 +636,28 @@ button {
 .diff__row--ins .diff__text::before { content: "+ "; color: var(--ok); }
 .diff__row--ctx .diff__text::before { content: "  "; color: var(--fg-mute); }
 
+/* ----- trace event result ----- */
+.trace-result {
+  padding: 0 12px 12px 12px;
+}
+.trace-section {
+  margin-top: 12px;
+}
+.trace-section__head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-mute);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+}
+.trace-row {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 2px 0;
+}
+
 /* ----- pagination footer ----- */
 .pagination {
   display: flex;

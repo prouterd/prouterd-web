@@ -16,11 +16,16 @@ module Prouterd
       # `command_executor` is an optional callable: ->(cmd, session_id:) {
       #   { exit_code:, stdout:, stderr:, prompt: }
       # }
+      # `events_consumer` is the EventsConsumer (when running against a
+      # remote core via WS /v1/events). When a browser subscribes here, we
+      # also call `consumer.ensure_upstream_topic(topic)` so the daemon
+      # starts pushing the relevant per-run / per-log events.
       # Production passes a lambda over the adapter; tests use a stub.
-      def initialize(socket, broadcaster:, command_executor: nil)
+      def initialize(socket, broadcaster:, command_executor: nil, events_consumer: nil)
         @socket            = socket
         @broadcaster       = broadcaster
         @command_executor  = command_executor
+        @events_consumer   = events_consumer
         @subs              = {}      # topic => broadcaster handle
         @subs_mutex        = Mutex.new
         @send_mutex        = Mutex.new
@@ -88,6 +93,11 @@ module Prouterd
             added = true
           end
         end
+
+        # Propagate the subscription upstream to the daemon's WS /v1/events
+        # so we actually receive per-run / per-log events. No-op in
+        # SqliteAdapter / MockAdapter modes (events_consumer is nil).
+        @events_consumer&.ensure_upstream_topic(topic)
 
         send_message(reply_to: msg["id"],
                      type: added ? "subscribe.ok" : "subscribe.already",
@@ -167,9 +177,10 @@ module Prouterd
         # Spec §14 examples don't carry `topic` on event frames, but we add
         # it as a top-level field so the client can dispatch deterministically
         # without inferring topics from `type` + payload shape.
+        type = payload.is_a?(Hash) ? (payload[:type] || payload["type"]) : nil
         send_raw(
           topic:   topic,
-          type:    payload[:type],
+          type:    type,
           payload: payload
         )
       end

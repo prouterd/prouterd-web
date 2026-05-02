@@ -10,15 +10,42 @@ options = {
   port:        9292,
   db:          nil,
   mock:        nil,
+  core_url:    ENV["PROUTERD_CORE_URL"],
+  core_token:  ENV["PROUTERD_CORE_TOKEN"],
   admin_token: ENV["PROUTERD_WEB_ADMIN_TOKEN"]
 }
 
 OptionParser.new do |o|
-  o.banner = "Usage: prouterd-web [options]"
+  o.banner = <<~BAN
+    Usage: prouterd-web [options]
+
+    Adapter modes (pick one — first wins):
+      --core-url URL       talk to a remote prouterd daemon over /v1 + WS
+      --db PATH            open the prouterd SQLite directly (single-machine)
+      --mock               in-memory fixtures (offline UI development)
+      (none of the above)  → mock adapter
+
+    Networking:
+      -p / --port PORT     bind port [9292]
+      -H / --host HOST     bind host [127.0.0.1]
+
+    Auth (web console session):
+      --admin-token TOKEN     require this token to sign in
+                              (env: PROUTERD_WEB_ADMIN_TOKEN)
+      --admin-token-env VAR   read admin token from env var
+
+  BAN
+
   o.on("-pPORT", "--port=PORT", Integer)               { |v| options[:port] = v }
   o.on("-HHOST", "--host=HOST", String)                { |v| options[:host] = v }
   o.on("--db=PATH", String, "Path to prouterd SQLite")  { |v| options[:db]   = v }
   o.on("--mock", "Force in-memory mock adapter")       { options[:mock] = true }
+  o.on("--core-url=URL", String, "URL of the prouterd daemon (env: PROUTERD_CORE_URL)") do |v|
+    options[:core_url] = v
+  end
+  o.on("--core-token=TOKEN", String, "Bearer token for the daemon (env: PROUTERD_CORE_TOKEN)") do |v|
+    options[:core_token] = v
+  end
   o.on("--admin-token=TOKEN", String, "Token required to sign in (env: PROUTERD_WEB_ADMIN_TOKEN)") do |v|
     options[:admin_token] = v
   end
@@ -29,20 +56,86 @@ OptionParser.new do |o|
   o.on_tail("-h", "--help")    { puts o; exit }
 end.parse!
 
-use_mock = options[:mock] || options[:db].nil?
-
-adapter =
-  if use_mock
-    Prouterd::Web::Adapters::MockAdapter.new
+mode =
+  if options[:core_url] && !options[:mock] && !options[:db]
+    :http_api
+  elsif options[:db] && !options[:mock]
+    :sqlite
   else
-    Prouterd::Web::Adapters::SqliteAdapter.new(db_path: options[:db])
+    :mock
   end
 
-app = Prouterd::Web::App.with_adapter(adapter, auth_token: options[:admin_token])
+adapter = nil
+events_consumer = nil
+cli_bridge = nil
+
+case mode
+when :http_api
+  client = Prouterd::Web::CoreClient.new(
+    base_url: options[:core_url],
+    token:    options[:core_token]
+  )
+  adapter = Prouterd::Web::Adapters::HttpApiAdapter.new(client: client)
+
+  # Wire live updates: EventsConsumer holds a Faye::WebSocket::Client to
+  # WS /v1/events; on receipt fans into the Broadcaster the WS handler
+  # uses for browser clients.
+  broadcaster      = Prouterd::Web::Broadcaster.new
+  events_consumer  = Prouterd::Web::EventsConsumer.new(broadcaster: broadcaster)
+  Prouterd::Web::EventMachineRunner.ensure_running!
+  events_url = options[:core_url].sub(/\Ahttp/, "ws") + "/v1/events"
+  headers    = options[:core_token] ? { "Authorization" => "Bearer #{options[:core_token]}" } : {}
+  EM.next_tick do
+    require "faye/websocket"
+    ws = Faye::WebSocket::Client.new(events_url, [], headers: headers)
+    events_consumer.attach(->(frame) { ws.send(frame) })
+    ws.on(:open)    { events_consumer.on_open }
+    ws.on(:message) { |e| events_consumer.on_message(e.data) }
+    ws.on(:close)   { events_consumer.on_close }
+  end
+
+  cli_bridge = Prouterd::Web::CliBridge.new(
+    core_url: options[:core_url],
+    token:    options[:core_token]
+  )
+
+when :sqlite
+  adapter = Prouterd::Web::Adapters::SqliteAdapter.new(db_path: options[:db])
+
+when :mock
+  adapter = Prouterd::Web::Adapters::MockAdapter.new
+end
+
+# In http_api mode, CLI command execution goes through CliBridge over WS,
+# not through the adapter directly. Patch the adapter so the App's WS
+# command_executor lambda routes through CliBridge instead.
+if cli_bridge
+  adapter.singleton_class.send(:define_method, :execute_cli_command) do |cmd, session_id:|
+    cli_bridge.dispatch(cmd, session_id: session_id)
+  end
+end
+
+app = Prouterd::Web::App.with_adapter(
+  adapter,
+  auth_token:      options[:admin_token],
+  events_consumer: events_consumer
+)
 
 handler = Rackup::Handler.get("puma")
+
 warn "prouterd-web #{Prouterd::Web::VERSION} on http://#{options[:host]}:#{options[:port]}"
-warn "  adapter: #{adapter.class.name}#{options[:db] ? " (#{options[:db]})" : ""}"
+warn "  mode:    #{mode}"
+case mode
+when :http_api
+  warn "  core:    #{options[:core_url]}"
+  warn "  events:  WS /v1/events (live updates)"
+  warn "  cli:     WS /v1/cli/:session_id"
+  warn "  bearer:  #{options[:core_token] ? 'configured' : 'NONE — open daemon'}"
+when :sqlite
+  warn "  db:      #{options[:db]}"
+when :mock
+  warn "  mock:    fixture data only"
+end
 warn "  auth:    #{options[:admin_token] ? "enabled" : "DISABLED — set --admin-token for production"}"
 
 handler.run(app, Host: options[:host], Port: options[:port])

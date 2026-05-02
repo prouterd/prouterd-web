@@ -285,6 +285,27 @@ module Prouterd
           { run_uid: new_run[:run_uid], replay_of: run_uid, from_block: from_block }
         end
 
+        def trace_event(event_json, interface_name: nil)
+          # Synthetic trace for offline UI dev. Walks PROCESSES fixture
+          # and assumes the matching global route fires for any event.
+          process_name = (event_json["type"] || "").start_with?("charge.") ? "billing_recover" : "lead_pipeline"
+          process = PROCESSES[process_name]
+          return { error: "no such process for trace" } unless process
+
+          interface = interface_name || (process_name == "billing_recover" ? "billing_evt" : "leads_in")
+          {
+            "global_route" => { "from_interface" => interface, "to_process" => process_name },
+            "global_route_passes" => true,
+            "process" => process_name,
+            "graph" => process[:blocks].each_with_index.map do |b, i|
+              dep = i.zero? ? nil : process[:blocks][i - 1][:name]
+              cond = process[:routes].find { |r| r[:to] == b[:name] && r[:condition] }&.dig(:condition)
+              { "block" => b[:name], "depends_on" => dep, "condition" => cond, "deferred" => !cond.nil? }
+            end,
+            "warnings" => []
+          }
+        end
+
         def cancel_run(run_uid)
           @runtime_mutex.synchronize do
             r = @runtime_runs[run_uid]
