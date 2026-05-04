@@ -3,7 +3,7 @@ require_relative "lib/prouterd/web/version"
 Gem::Specification.new do |spec|
   spec.name        = "prouterd-web"
   spec.version     = Prouterd::Web::VERSION
-  spec.authors     = ["Prouterd Authors"]
+  spec.authors     = ["Nikolay Falshunov"]
   spec.summary     = "Process Router Web Console"
   spec.description = "Operator console for the Prouterd Process Router: object tree, " \
                      "draggable windows, run inspector, embedded CLI, live updates over WebSocket. " \

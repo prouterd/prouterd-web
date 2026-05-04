@@ -15,7 +15,7 @@ Browser  ──HTTP /console + assets──>  prouterd-web (Roda + Puma)
                                                 │ WS  /v1/events (events)
                                                 │ WS  /v1/cli/:sid (shell)
                                                 ▼
-                                       prouterd daemon (Phase 15+)
+                                       prouterd daemon
                                        SQLite + runners + scheduler
 ```
 
@@ -88,32 +88,18 @@ WebSocketConnection (per browser) forwards to /ws subscribers
 Browser's window manager calls hydrateBody() → debounced re-fetch
 ```
 
-## Acceptance criteria (TZ §46)
+## Features
 
-20/20 covered:
-
-| # | Item                                              | Status                                        |
-|---|---------------------------------------------------|-----------------------------------------------|
-| 1 | Запускается без Rails                             | Roda + Puma                                   |
-| 2 | Подключается к Process Router Core                | over /v1 HTTP + WS                            |
-| 3 | Использует общий CoreAdapter                      | `HttpApiAdapter` (sole adapter post-refactor) |
-| 4 | `/console`                                        | ✓                                             |
-| 5 | Object tree                                       | ✓                                             |
-| 6 | Draggable / resizable windows                     | ✓                                             |
-| 7 | Layout persistence                                | localStorage                                  |
-| 8 | Список processes                                  | ✓                                             |
-| 9 | Список runs                                       | ✓ + pagination                                |
-| 10 | Run Inspector                                    | ✓                                             |
-| 11 | Steps run                                        | ✓                                             |
-| 12 | Logs                                             | ✓ (live tail via WS)                          |
-| 13 | Context (with redaction §37.1)                   | ✓                                             |
-| 14 | Config (active / boot / draft / diff / commits)  | ✓                                             |
-| 15 | WebSocket live updates                           | ✓                                             |
-| 16 | Embedded CLI                                     | ✓ via `CliBridge` over WS                     |
-| 17 | Trigger process                                  | ✓                                             |
-| 18 | Trace event                                      | ✓ via `POST /v1/trace`                        |
-| 19 | Replay run (full + from block)                   | ✓                                             |
-| 20 | No secret values displayed                       | name + source ref + status only               |
+- `/console` UI: object tree on the left, draggable / resizable
+  windows in the workspace, layout persisted in `localStorage`
+- Process and run listings with pagination
+- Run inspector: per-step status, captured logs (live-tailed via
+  the upstream daemon's `/v1/events` WebSocket), context (with
+  redaction), produced artifacts, replay full / from a chosen block
+- Config viewer: active / boot / draft / diff / commit history
+- Trigger a process or trace an event from the UI
+- Embedded CLI window over the daemon's `/v1/cli/:session_id`
+- Secret values are never displayed — only declared name and source ref
 
 ## Tests
 

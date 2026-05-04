@@ -15,7 +15,7 @@ module Prouterd
     # for the lifetime of the process. The unbound App class is never run
     # directly.
     #
-    # Auth model (spec §35-37):
+    # Auth model:
     # - When `auth_token` is configured, every request other than /health
     #   and /assets/* must carry a session cookie matching the token's
     #   digest. /login renders a form; POST /login validates and sets the

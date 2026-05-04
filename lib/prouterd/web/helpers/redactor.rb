@@ -6,8 +6,8 @@ module Prouterd
       # Arrays and replaces values whose key looks sensitive with the
       # literal string "[REDACTED]".
       #
-      # Spec §37.1: secret values, authorization headers, bearer tokens,
-      # known env secret values must never appear in operator views. Logs
+      # Secret values, authorization headers, bearer tokens, and known
+      # env secret values must never appear in operator views. Logs
       # are already redacted by core's Redactor at write time, so we only
       # need to handle inbound user-supplied JSON (input events) plus any
       # context payloads that happen to carry credentials inline.

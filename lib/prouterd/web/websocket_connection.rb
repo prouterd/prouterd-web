@@ -3,8 +3,8 @@ require "json"
 module Prouterd
   module Web
     # Per-WebSocket-client state. Owns the subscriptions taken out on the
-    # broadcaster on this client's behalf, parses inbound protocol frames
-    # (spec §14), and serializes outbound events / replies to JSON.
+    # broadcaster on this client's behalf, parses inbound protocol frames,
+    # and serializes outbound events / replies to JSON.
     #
     # The `socket` collaborator only needs to expose `#send(string)` —
     # in production it's a Faye::WebSocket; in tests it's a tiny capture
@@ -174,8 +174,9 @@ module Prouterd
       end
 
       def forward_event(topic, payload)
-        # Spec §14 examples don't carry `topic` on event frames, but we add
-        # it as a top-level field so the client can dispatch deterministically
+        # The wire-format examples don't carry `topic` on event frames,
+        # but we add it as a top-level field so the client can dispatch
+        # deterministically
         # without inferring topics from `type` + payload shape.
         # Convention: payloads on the local Broadcaster carry string keys
         # (matches the wire format from /v1/events JSON parse).
