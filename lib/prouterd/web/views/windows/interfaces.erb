@@ -20,13 +20,6 @@
             # `key=value`. http base-url, llm provider/model, postgres
             # dsn, docker image, etc. all show up without per-type code.
             fields = i[:fields] || {}
-            # Pre-Phase-32 daemons: pull the flat keys onto this row.
-            fields = fields.merge({
-              "path"     => i[:path],
-              "method"   => i[:method],
-              "schedule" => i[:schedule],
-              "timezone" => i[:timezone]
-            }.compact) if fields.empty?
           %>
           <% if fields.empty? %>
             —

@@ -90,19 +90,13 @@ module Prouterd
               kind:      i["type"],
               direction: i["direction"],
               status:    i["shutdown"] ? "disabled" : "enabled",
-              # Phase 22+ — core ships a plugin-driven `fields` hash so
-              # http/llm/postgres/docker/shell all render with their type-
-              # specific config (base-url, model, dsn, image, …) without
-              # the web side knowing which keys belong to which type.
-              fields:    i["fields"] || {},
-              # back-compat: pre-Phase-32 daemons flattened webhook + cron
-              # fields onto the top-level summary; the UI window still
-              # peeks at these for older daemons.
-              path:      i["path"],
-              method:    i["method"],
-              schedule:  i["schedule"],
-              timezone:  i["timezone"]
-            }.compact
+              # Plugin-driven `fields` hash (core Phase 22+/32) — http /
+              # llm / postgres / docker / shell all render with their
+              # type-specific config (base-url, model, dsn, image, …)
+              # without the web side knowing which keys belong to
+              # which type.
+              fields:    i["fields"] || {}
+            }
           end
         end
 
@@ -120,10 +114,7 @@ module Prouterd
               retry_backoff:          p["retry_backoff"],
               retry_initial_delay_ms: p["retry_initial_delay_ms"],
               retry_max_delay_ms:     p["retry_max_delay_ms"],
-              # Phase 25 retry-when conditions. Pre-Phase-32 daemons
-              # don't ship this key — fall back to empty list so the UI
-              # renders cleanly against either version.
-              retry_when:             Array(p["retry_when"]),
+              retry_when:             p["retry_when"],
               timeout_ms:             p["timeout_ms"]
             }
           end
