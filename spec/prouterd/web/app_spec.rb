@@ -149,6 +149,17 @@ RSpec.describe Prouterd::Web::App do
         expect(last_response.body).to include("leads_in")
       end
 
+      it "GET /windows/interfaces shows direction + plugin-driven fields" do
+        get "/windows/interfaces"
+        body = last_response.body
+        # direction column (Phase 32)
+        expect(body).to include("inbound")
+        # plugin-driven fields render: webhook path/method, cron schedule
+        expect(body).to include("path=/leads")
+        expect(body).to include("method=POST")
+        expect(body).to include("schedule=*/5 * * * *")
+      end
+
       it "GET /windows/routes lists routes" do
         get "/windows/routes"
         expect(last_response.status).to eq(200)
@@ -177,6 +188,16 @@ RSpec.describe Prouterd::Web::App do
         get "/windows/policies"
         expect(last_response.status).to eq(200)
         expect(last_response.body).to include("retry_standard")
+      end
+
+      it "GET /windows/policies shows retry-when conditions (Phase 25)" do
+        get "/windows/policies"
+        body = last_response.body
+        expect(body).to include("Retry when")
+        # the demo policy retries on transient http/timeout errors
+        expect(body).to include("error_type")
+        expect(body).to include("timeout")
+        expect(body).to include("http_status")
       end
 
       it "GET /windows/secrets shows declared names but no values" do
@@ -228,6 +249,19 @@ RSpec.describe Prouterd::Web::App do
         expect(body).to include('data-tab="routes"')
         expect(body).to include("extract")
         expect(body).not_to include("<!DOCTYPE")
+      end
+
+      it "shows block.interface (post-Phase-23 shape) in the Blocks tab" do
+        get "/windows/process/lead_pipeline"
+        body = last_response.body
+        expect(body).to include("docker extractor")
+        expect(body).to include("http salesforce")
+        # call_summary derives from call_fields per iface type
+        expect(body).to include("ruby /opt/blocks/extract.rb")
+        expect(body).to include("POST /leads")
+        # secret_names render comma-joined
+        expect(body).to include("CLEARBIT_API_KEY")
+        expect(body).to include("WEBHOOK_TOKEN")
       end
 
       it "404s for an unknown process" do

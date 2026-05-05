@@ -85,7 +85,24 @@ module Prouterd
 
         def list_interfaces
           (client.get("/v1/interfaces")["data"] || []).map do |i|
-            { name: i["name"], kind: i["type"], status: i["shutdown"] ? "disabled" : "enabled" }
+            {
+              name:      i["name"],
+              kind:      i["type"],
+              direction: i["direction"],
+              status:    i["shutdown"] ? "disabled" : "enabled",
+              # Phase 22+ — core ships a plugin-driven `fields` hash so
+              # http/llm/postgres/docker/shell all render with their type-
+              # specific config (base-url, model, dsn, image, …) without
+              # the web side knowing which keys belong to which type.
+              fields:    i["fields"] || {},
+              # back-compat: pre-Phase-32 daemons flattened webhook + cron
+              # fields onto the top-level summary; the UI window still
+              # peeks at these for older daemons.
+              path:      i["path"],
+              method:    i["method"],
+              schedule:  i["schedule"],
+              timezone:  i["timezone"]
+            }.compact
           end
         end
 
@@ -103,6 +120,10 @@ module Prouterd
               retry_backoff:          p["retry_backoff"],
               retry_initial_delay_ms: p["retry_initial_delay_ms"],
               retry_max_delay_ms:     p["retry_max_delay_ms"],
+              # Phase 25 retry-when conditions. Pre-Phase-32 daemons
+              # don't ship this key — fall back to empty list so the UI
+              # renders cleanly against either version.
+              retry_when:             Array(p["retry_when"]),
               timeout_ms:             p["timeout_ms"]
             }
           end
@@ -412,6 +433,9 @@ module Prouterd
             block_name:    s["block_name"],
             status:        s["status"],
             attempt:       s["attempt"],
+            # `image` is populated only for docker steps (orchestrator
+            # writes iface.type_fields["image"] into the row). For shell /
+            # http / llm / postgres it's nil — UI shows "—".
             image:         s["image"],
             exit_code:     s["exit_code"],
             error_type:    s["error_type"],
@@ -422,18 +446,44 @@ module Prouterd
           }
         end
 
+        # Phase 23 reshaped the block: `interface_ref` + `call_fields`
+        # replaced `image` / `command` / `input` / `output`. This hash
+        # mirrors the new shape and adds a single-line `interface_label`
+        # ("docker img1") for tabular display.
         def block_to_hash(b)
+          iface       = b["interface"] || {}
+          call_fields = b["call_fields"] || {}
           {
-            name:         b["name"],
-            image:        b["image"],
-            timeout_ms:   b["timeout_ms"],
-            input:        b["input"],
-            output:       b["output"],
-            retry_policy: b["retry_policy"],
-            secrets:      Array(b["secrets"]),
-            network:      b["network"],
-            status:       b["shutdown"] ? "disabled" : "ready"
+            name:            b["name"],
+            interface_type:  iface["type"],
+            interface_name:  iface["name"],
+            interface_label: iface["type"] && iface["name"] ? "#{iface['type']} #{iface['name']}" : nil,
+            call_fields:     call_fields,
+            call_summary:    summarize_call_fields(iface["type"], call_fields),
+            timeout_ms:      b["timeout_ms"],
+            retry_policy:    b["retry_policy"],
+            contract:        b["contract"],
+            secret_names:    Array(b["secret_names"]),
+            status:          b["shutdown"] ? "disabled" : "ready"
           }
+        end
+
+        # Single-line summary of the most operator-relevant per-call args.
+        # Per iface type, picks the field that's most likely to identify
+        # what the block actually does. Falls back to a generic key=value
+        # render so unknown types still render something useful.
+        def summarize_call_fields(iface_type, fields)
+          return nil if fields.empty?
+
+          case iface_type
+          when "shell"    then fields["exec"]
+          when "docker"   then fields["command"]
+          when "http"     then [fields["method"], fields["path"]].compact.join(" ").strip.then { |s| s.empty? ? nil : s }
+          when "llm"      then fields["prompt"]&.then { |p| p.length > 80 ? "#{p[0, 80]}…" : p }
+          when "postgres" then fields["query"]&.then { |q| q.length > 80 ? "#{q[0, 80]}…" : q }
+          else
+            fields.first(2).map { |k, v| "#{k}=#{v}" }.join(" ")
+          end
         end
 
         def process_route_to_hash(r, process_name)

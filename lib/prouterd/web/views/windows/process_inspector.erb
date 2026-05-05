@@ -40,11 +40,11 @@
     <thead>
       <tr>
         <th>Block</th>
-        <th>Image</th>
-        <th>Input</th>
-        <th>Output</th>
+        <th>Interface</th>
+        <th>Call</th>
         <th>Timeout</th>
         <th>Retry</th>
+        <th>Contract</th>
         <th>Secrets</th>
       </tr>
     </thead>
@@ -52,12 +52,12 @@
       <% @process[:blocks].each do |b| %>
         <tr>
           <td><%= b[:name] %></td>
-          <td><%= b[:image] || "—" %></td>
-          <td><%= b[:input] || "—" %></td>
-          <td><%= b[:output] || "—" %></td>
+          <td><%= b[:interface_label] || "—" %></td>
+          <td class="data-table__truncate"><%= b[:call_summary] || "—" %></td>
           <td><%= b[:timeout_ms] ? "#{b[:timeout_ms]} ms" : "—" %></td>
           <td><%= b[:retry_policy] || "—" %></td>
-          <td><%= b[:secrets].any? ? b[:secrets].join(", ") : "—" %></td>
+          <td><%= b[:contract] || "—" %></td>
+          <td><%= b[:secret_names].any? ? b[:secret_names].join(", ") : "—" %></td>
         </tr>
       <% end %>
       <% if @process[:blocks].empty? %>

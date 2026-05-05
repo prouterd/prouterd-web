@@ -30,29 +30,36 @@ module Prouterd
             "interfaces" => 3, "processes" => 3, "accepting" => true,
             "in_flight" => 2
           }
+          # Block shape mirrors the post-Phase-23/32 /v1 envelope:
+          # `interface: {type, name}` + `call_fields: {...}` + `secret_names`,
+          # NOT the legacy `image / input / output` keys.
           stub.processes = [
             {
               name: "lead_pipeline", description: "Lead enrichment and sales notification",
               queue: "default", shutdown: false,
               blocks: [
-                { name: "extract",      image: "registry.local/blocks/extract-lead:v1",
-                  input: "event.body", output: "lead.raw", timeout_ms: 30_000,
-                  retry_policy: nil, shutdown: false },
-                { name: "enrich",       image: "registry.local/blocks/enrich-lead:v3",
-                  input: "lead.raw",   output: "lead.enriched", timeout_ms: 120_000,
-                  retry_policy: "retry_standard", shutdown: false },
-                { name: "score",        image: "registry.local/blocks/score-lead:v2",
-                  input: "lead.enriched", output: "lead.scored", timeout_ms: 20_000,
-                  retry_policy: nil,   shutdown: false },
-                { name: "notify_sales", image: "registry.local/blocks/notify-sales:v1",
-                  input: "lead.scored", output: "notification.result", timeout_ms: 15_000,
-                  retry_policy: nil,   shutdown: false }
+                { name: "extract", interface: { type: "docker", name: "extractor" },
+                  call_fields: { "command" => "ruby /opt/blocks/extract.rb" },
+                  timeout_ms: 30_000, retry_policy: nil,
+                  secret_names: [], shutdown: false },
+                { name: "enrich", interface: { type: "docker", name: "enricher" },
+                  call_fields: { "command" => "ruby /opt/blocks/enrich.rb" },
+                  timeout_ms: 120_000, retry_policy: "retry_standard",
+                  secret_names: ["CLEARBIT_API_KEY"], shutdown: false },
+                { name: "score", interface: { type: "docker", name: "scorer" },
+                  call_fields: { "command" => "ruby /opt/blocks/score.rb" },
+                  timeout_ms: 20_000, retry_policy: nil,
+                  secret_names: [], shutdown: false },
+                { name: "notify_sales", interface: { type: "http", name: "salesforce" },
+                  call_fields: { "method" => "POST", "path" => "/leads", "body-json" => "{\"id\":\"x\"}" },
+                  timeout_ms: 15_000, retry_policy: nil,
+                  secret_names: ["WEBHOOK_TOKEN"], shutdown: false }
               ],
               routes: [
                 { from: "extract", to: "enrich",       matches: [], on_failure: "stop", shutdown: false },
                 { from: "enrich",  to: "score",        matches: [], on_failure: "stop", shutdown: false },
                 { from: "score",   to: "notify_sales",
-                  matches: [{ path: "lead.scored.score", operator: "gt", values: [70] }],
+                  matches: [{ path: "score.value", operator: "gt", values: [70] }],
                   on_failure: "stop", shutdown: false }
               ]
             },
@@ -62,10 +69,16 @@ module Prouterd
               blocks: [], routes: []
             }
           ]
+          # Interface shape: post-Phase-32 plugin-driven `fields` hash
+          # plus `direction`. Older daemons still ship the flat keys —
+          # the adapter handles both shapes.
           stub.interfaces = [
-            { name: "leads_in",     type: "webhook", shutdown: false },
-            { name: "billing_evt",  type: "queue",   shutdown: false },
-            { name: "support_chat", type: "webhook", shutdown: true  }
+            { name: "leads_in", type: "webhook", direction: "inbound", shutdown: false,
+              fields: { "path" => "/leads", "method" => "POST" } },
+            { name: "billing_evt",  type: "cron",   direction: "inbound",  shutdown: false,
+              fields: { "schedule" => "*/5 * * * *", "timezone" => "UTC" } },
+            { name: "support_chat", type: "webhook", direction: "inbound",  shutdown: true,
+              fields: { "path" => "/support", "method" => "POST" } }
           ]
           stub.queues = [
             { name: "default", concurrency: 10, timeout_ms: 600_000 },
@@ -73,7 +86,11 @@ module Prouterd
           ]
           stub.policies = [
             { name: "retry_standard", retry_attempts: 3, retry_backoff: "exponential",
-              retry_initial_delay_ms: 5_000, retry_max_delay_ms: 120_000, timeout_ms: nil }
+              retry_initial_delay_ms: 5_000, retry_max_delay_ms: 120_000,
+              retry_when: [
+                { path: "error_type", operator: "in", values: %w[timeout http_status] }
+              ],
+              timeout_ms: nil }
           ]
           stub.secrets = [
             { name: "WEBHOOK_TOKEN",    source_type: "env", source_ref: "WEBHOOK_TOKEN",

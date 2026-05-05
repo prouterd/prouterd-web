@@ -1,6 +1,6 @@
 # prouterd-web
 
-Operator console for the [prouterd](../prouterd) Process Router.
+Operator console for the [prouterd](../prouterd-core) Process Router.
 
 A standalone Ruby web app that talks to a running prouterd daemon over its
 `/v1` HTTP API plus two WebSocket streams (`/v1/events` for live state,
@@ -21,18 +21,18 @@ Browser  ──HTTP /console + assets──>  prouterd-web (Roda + Puma)
 
 ## Quickstart
 
-### 1. Run an prouterd daemon (any host, port 9000)
+### 1. Run a prouterd daemon (any host, port 9000)
 
 ```sh
-cd ../prouterd
-PROUTERD_ADMIN_TOKEN=demo bundle exec exe/prouter serve \
-  --db /tmp/prouterd.db --runner stub --port 9000
+cd ../prouterd-core
+PROUTERD_ADMIN_TOKEN=demo bundle exec exe/prouterd \
+  --db /tmp/prouterd.db --port 9000
 ```
 
 ### 2. Run the console
 
 ```sh
-cd prouterd-ui
+cd prouterd-web
 bundle install
 bundle exec exe/prouterd-web \
   --core-url http://localhost:9000 \
@@ -107,9 +107,12 @@ Browser's window manager calls hydrateBody() → debounced re-fetch
 bundle exec rspec
 ```
 
-177 examples. Adapter + protocol unit specs, integration of the full App
-stack against a programmable Rack stub of `/v1` (`spec/support/stub_core_app.rb`).
-No daemon required for the suite.
+182 examples. Adapter + protocol unit specs, integration of the full
+App stack against a programmable Rack stub of `/v1`
+(`spec/support/stub_core_app.rb`). Coverage tracks the post-Phase-32
+core JSON envelope: `interface: {type, name}` + `call_fields` +
+`secret_names` on blocks, `retry_when` on policies, plugin-driven
+`fields` + `direction` on interfaces. No daemon required for the suite.
 
 ## Caveats
 

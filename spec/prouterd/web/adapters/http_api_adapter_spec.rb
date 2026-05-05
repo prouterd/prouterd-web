@@ -106,8 +106,11 @@ RSpec.describe Prouterd::Web::Adapters::HttpApiAdapter do
         {
           name: "lead_pipeline", description: "demo", queue: "default", shutdown: false,
           blocks: [
-            { "name" => "extract", "image" => "alpine", "timeout_ms" => 30_000, "input" => "event.body",
-              "output" => "lead.raw", "retry_policy" => nil, "shutdown" => false }
+            { "name" => "extract",
+              "interface" => { "type" => "docker", "name" => "extractor" },
+              "call_fields" => { "command" => "ruby /opt/blocks/extract.rb" },
+              "timeout_ms" => 30_000, "retry_policy" => nil,
+              "secret_names" => ["API_TOKEN"], "shutdown" => false }
           ],
           routes: [
             { "from" => "extract", "to" => "enrich", "matches" => [], "on_failure" => "stop" }
@@ -124,9 +127,18 @@ RSpec.describe Prouterd::Web::Adapters::HttpApiAdapter do
       expect(p[:status]).to eq("enabled")
     end
 
-    it "get_process expands blocks + routes" do
+    it "get_process expands blocks + routes with the new interface shape" do
       p = adapter.get_process("lead_pipeline")
-      expect(p[:blocks].first).to include(name: "extract", image: "alpine")
+      block = p[:blocks].first
+      expect(block).to include(
+        name:            "extract",
+        interface_type:  "docker",
+        interface_name:  "extractor",
+        interface_label: "docker extractor",
+        secret_names:    ["API_TOKEN"]
+      )
+      expect(block[:call_fields]).to eq("command" => "ruby /opt/blocks/extract.rb")
+      expect(block[:call_summary]).to eq("ruby /opt/blocks/extract.rb")
       expect(p[:routes].first).to include(from: "extract", to: "enrich", on_failure: "stop")
     end
 

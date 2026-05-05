@@ -2,7 +2,9 @@
   <thead>
     <tr>
       <th>Name</th>
-      <th>Kind</th>
+      <th>Type</th>
+      <th>Direction</th>
+      <th>Config</th>
       <th>Status</th>
     </tr>
   </thead>
@@ -11,11 +13,32 @@
       <tr>
         <td><%= i[:name] %></td>
         <td><%= i[:kind] %></td>
+        <td><%= i[:direction] || "—" %></td>
+        <td class="data-table__truncate">
+          <%
+            # Plugin-driven render: dump every populated field as
+            # `key=value`. http base-url, llm provider/model, postgres
+            # dsn, docker image, etc. all show up without per-type code.
+            fields = i[:fields] || {}
+            # Pre-Phase-32 daemons: pull the flat keys onto this row.
+            fields = fields.merge({
+              "path"     => i[:path],
+              "method"   => i[:method],
+              "schedule" => i[:schedule],
+              "timezone" => i[:timezone]
+            }.compact) if fields.empty?
+          %>
+          <% if fields.empty? %>
+            —
+          <% else %>
+            <%= fields.map { |k, v| "#{k}=#{v}" }.join("  ") %>
+          <% end %>
+        </td>
         <td class="status-<%= i[:status] %>"><%= i[:status] %></td>
       </tr>
     <% end %>
     <% if @interfaces.empty? %>
-      <tr><td colspan="3" class="data-table__empty">No interfaces configured.</td></tr>
+      <tr><td colspan="5" class="data-table__empty">No interfaces configured.</td></tr>
     <% end %>
   </tbody>
 </table>

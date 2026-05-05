@@ -6,6 +6,7 @@
       <th>Backoff</th>
       <th>Initial delay</th>
       <th>Max delay</th>
+      <th>Retry when</th>
       <th>Timeout</th>
     </tr>
   </thead>
@@ -17,11 +18,22 @@
         <td><%= p[:retry_backoff] || "—" %></td>
         <td><%= p[:retry_initial_delay_ms] ? "#{p[:retry_initial_delay_ms]} ms" : "—" %></td>
         <td><%= p[:retry_max_delay_ms] ? "#{p[:retry_max_delay_ms]} ms" : "—" %></td>
+        <td class="data-table__truncate">
+          <% rw = Array(p[:retry_when]) %>
+          <% if rw.empty? %>
+            —
+          <% else %>
+            <%= rw.map { |m|
+              vals = Array(m["values"]).map { |v| v.is_a?(String) ? %("#{v}") : v.to_s }.join(",")
+              "#{m['path']} #{m['operator']} #{vals}".strip
+            }.join("  •  ") %>
+          <% end %>
+        </td>
         <td><%= p[:timeout_ms] ? "#{p[:timeout_ms]} ms" : "—" %></td>
       </tr>
     <% end %>
     <% if @policies.empty? %>
-      <tr><td colspan="6" class="data-table__empty">No retry policies defined.</td></tr>
+      <tr><td colspan="7" class="data-table__empty">No retry policies defined.</td></tr>
     <% end %>
   </tbody>
 </table>
