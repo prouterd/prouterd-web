@@ -14,6 +14,7 @@
   <button type="button" class="tab tab--active" data-tab="overview">Overview</button>
   <button type="button" class="tab"             data-tab="blocks">Blocks</button>
   <button type="button" class="tab"             data-tab="routes">Routes</button>
+  <button type="button" class="tab"             data-tab="graph">Graph</button>
   <button type="button" class="tab"             data-tab="trigger">Trigger</button>
 </nav>
 
@@ -65,6 +66,38 @@
       <% end %>
     </tbody>
   </table>
+</div>
+
+<%
+  graph_payload = {
+    nodes: @process[:blocks].map { |b|
+      {
+        id:        b[:name],
+        label:     b[:name],
+        interface: b[:interface_label],
+        status:    b[:status],
+        entry:     b[:name] == @process[:entry_block]
+      }
+    },
+    edges: @process[:routes].map { |r|
+      {
+        from:       r[:from],
+        to:         r[:to],
+        condition:  r[:condition],
+        on_failure: r[:on_failure] ? true : false,
+        enabled:    r[:enabled]
+      }
+    }
+  }
+%>
+<div class="tab-panel" data-tab-panel="graph" hidden>
+  <div class="process-graph"
+       data-process-graph
+       data-process-name="<%= @process[:name] %>"
+       data-graph='<%= JSON.generate(graph_payload) %>'>
+    <div class="process-graph__hint">drag a node to reposition · layout saved per process</div>
+    <svg class="process-graph__svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
 </div>
 
 <div class="tab-panel" data-tab-panel="trigger" hidden>

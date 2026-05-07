@@ -247,8 +247,24 @@ RSpec.describe Prouterd::Web::App do
         expect(body).to include('data-tab="overview"')
         expect(body).to include('data-tab="blocks"')
         expect(body).to include('data-tab="routes"')
+        expect(body).to include('data-tab="graph"')
         expect(body).to include("extract")
         expect(body).not_to include("<!DOCTYPE")
+      end
+
+      it "embeds a graph payload (nodes + edges) in the Graph tab" do
+        get "/windows/process/lead_pipeline"
+        body = last_response.body
+        expect(body).to include('data-process-graph')
+        expect(body).to include('data-process-name="lead_pipeline"')
+        # JSON is HTML-escaped inside the data-graph attribute, so quotes
+        # become &quot;. Keys + a representative node + a representative
+        # edge are enough to confirm the payload reached the client.
+        expect(body).to include('&quot;nodes&quot;')
+        expect(body).to include('&quot;edges&quot;')
+        expect(body).to include('&quot;id&quot;:&quot;extract&quot;')
+        expect(body).to include('&quot;from&quot;:&quot;extract&quot;')
+        expect(body).to include('&quot;to&quot;:&quot;enrich&quot;')
       end
 
       it "shows block.interface (post-Phase-23 shape) in the Blocks tab" do

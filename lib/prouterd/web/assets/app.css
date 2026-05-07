@@ -914,4 +914,35 @@ body.login-page {
 .status-queued   { color: var(--info); }
 .status-enabled  { color: var(--ok); }
 .status-canceled { color: var(--fg-mute); }
+
+/* ----- process graph (Graph tab in Process Inspector) ----- */
+.process-graph {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: auto;
+  background: var(--bg);
+}
+.process-graph__hint {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 11px;
+  color: var(--fg-mute);
+  pointer-events: none;
+}
+.process-graph__svg { display: block; }
+
+.pg-edge   { stroke: var(--fg-mute); fill: none; stroke-width: 1.2; }
+.pg-edge--failure  { stroke: var(--fail); stroke-dasharray: 4 3; }
+.pg-edge--disabled { opacity: 0.5; stroke-dasharray: 2 3; }
+
+.pg-node              { cursor: grab; }
+.pg-node--dragging    { cursor: grabbing; }
+.pg-node-rect         { fill: var(--bg-2); stroke: var(--border); stroke-width: 1; }
+.pg-node-rect--disabled { stroke: var(--fg-mute); opacity: 0.6; }
+.pg-node--entry .pg-node-rect { stroke: var(--accent); stroke-width: 2; }
+.pg-node-text         { fill: var(--fg); font-family: var(--mono); font-size: 12px; user-select: none; pointer-events: none; }
+.pg-node-text--sub    { fill: var(--fg-dim); font-size: 11px; }
 .status-timeout  { color: var(--warn); }
