@@ -1,11 +1,10 @@
-// cli.js — Phase UI-7.
+// cli.js
 //
-// Wires up CLI windows: input + output area, command history (↑/↓),
-// localStorage history persistence per session_id, and command dispatch
-// over the same WebSocket the live-updates layer uses.
+// Wires up CLI windows: input + output area, command history (↑/↓)
+// persisted in localStorage per session_id, and command dispatch via
+// ProuterdCli.open(sessionId) — a dedicated WS to /v1/cli/:sid.
 //
-// CLI window content (rendered server-side by views/windows/cli.erb)
-// looks like:
+// CLI window markup (emitted by windows/cli.js renderer):
 //
 //   <div class="cli" data-cli-session="<sid>">
 //     <div class="cli__output"></div>
@@ -16,8 +15,8 @@
 //   </div>
 //
 // We attach to each .cli element exactly once (idempotent via a marker
-// data attribute), so re-hydration after live-update reloads doesn't
-// stack duplicate handlers.
+// data attribute) so re-hydration on live-update doesn't stack
+// duplicate handlers.
 
 (function () {
   "use strict";

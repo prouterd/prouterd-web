@@ -1,11 +1,11 @@
-// window_manager.js — Phase UI-2.
+// window_manager.js
 //
 // Vanilla JS, no build step. Owns the workspace: opening windows, focus /
 // z-order, drag-to-move (header), drag-to-resize (corner handle),
-// minimize / maximize / restore, taskbar entries, and layout persistence
-// to localStorage. Window body content is fetched from
-// `GET /windows/:type[/:resource_id]` over plain HTTP — Phase UI-6 will
-// add WebSocket `window.render` / `window.patch` on top of this.
+// minimize / maximize / restore, taskbar entries, layout persistence to
+// localStorage. Window bodies are produced by ProuterdWindows.render
+// (one async function per window type, see assets/windows/), which
+// in turn pulls data from the daemon via ProuterdAdapter / WS-RPC.
 
 (function () {
   "use strict";

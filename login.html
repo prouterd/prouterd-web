@@ -22,14 +22,21 @@
       <input id="login-token" name="token" type="password" class="login__input"
              autofocus>
 
-      <button type="submit" class="login__btn">Sign in</button>
+      <button type="submit" class="login__btn" id="login-submit">Sign in</button>
     </form>
   </main>
 
   <script>
+    // Validates the daemon URL + bearer by opening a WS to /v1/events
+    // with ?token=... and issuing one `status` RPC call. If the WS opens
+    // and the call replies, creds are good. We close the WS immediately
+    // and persist the creds before navigating to index.html.
     (function () {
       "use strict";
+
       const STORAGE_KEY = "prouterd.core";
+      const HANDSHAKE_TIMEOUT_MS = 5000;
+      const CALL_TIMEOUT_MS      = 5000;
 
       let prefill = {};
       try { prefill = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}"); }
@@ -38,6 +45,7 @@
       const urlEl   = document.getElementById("login-url");
       const tokenEl = document.getElementById("login-token");
       const errEl   = document.getElementById("login-error");
+      const submit  = document.getElementById("login-submit");
       urlEl.value   = prefill.url   || "";
       tokenEl.value = prefill.token || "";
 
@@ -48,22 +56,77 @@
         const token = tokenEl.value;
         if (!url) { fail("Daemon URL is required"); return; }
 
+        submit.disabled = true;
+        submit.textContent = "Signing in…";
         try {
-          const headers = { "Accept": "application/json" };
-          if (token) headers["Authorization"] = "Bearer " + token;
-          const res = await fetch(url + "/v1/status", { headers });
-          if (res.status === 401) { fail("Invalid token"); return; }
-          if (!res.ok)            { fail("HTTP " + res.status); return; }
-          await res.json();
+          await verify(url, token);
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url: url, token: token }));
+          const next = new URLSearchParams(window.location.search).get("next") || "index.html";
+          window.location.href = next;
         } catch (err) {
-          fail("Cannot reach daemon: " + err.message);
-          return;
+          fail(err.message);
+        } finally {
+          submit.disabled = false;
+          submit.textContent = "Sign in";
         }
-
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url: url, token: token }));
-        const next = new URLSearchParams(window.location.search).get("next") || "index.html";
-        window.location.href = next;
       });
+
+      function verify(url, token) {
+        return new Promise(function (resolve, reject) {
+          let wsUrl = url.replace(/^http/, "ws") + "/v1/events";
+          if (token) wsUrl += "?token=" + encodeURIComponent(token);
+
+          let ws;
+          try { ws = new WebSocket(wsUrl); }
+          catch (e) { return reject(new Error("Cannot reach daemon: " + e.message)); }
+
+          let settled = false;
+          const finish = function (err, val) {
+            if (settled) return;
+            settled = true;
+            try { ws.close(); } catch (e) {}
+            err ? reject(err) : resolve(val);
+          };
+
+          const handshakeTimer = setTimeout(function () {
+            finish(new Error("Daemon did not respond within " + (HANDSHAKE_TIMEOUT_MS / 1000) + "s"));
+          }, HANDSHAKE_TIMEOUT_MS);
+
+          let callTimer = null;
+
+          ws.addEventListener("open", function () {
+            clearTimeout(handshakeTimer);
+            const id = "login_" + Date.now();
+            ws.send(JSON.stringify({ id: id, type: "call", payload: { method: "status", args: {} } }));
+            callTimer = setTimeout(function () {
+              finish(new Error("Daemon accepted the connection but did not reply to status"));
+            }, CALL_TIMEOUT_MS);
+          });
+
+          ws.addEventListener("message", function (e) {
+            let msg;
+            try { msg = JSON.parse(e.data); } catch (err) { return; }
+            if (!msg.reply_to) return;     // ignore unrelated frames
+            if (callTimer) clearTimeout(callTimer);
+            if (msg.type === "reply") return finish(null, msg.payload);
+            if (msg.type === "error") {
+              const p = msg.payload || {};
+              if (p.code === "unauthorized") return finish(new Error("Invalid token"));
+              return finish(new Error(p.message || "rpc error"));
+            }
+            finish(new Error("Unexpected reply frame: " + msg.type));
+          });
+
+          ws.addEventListener("close", function () {
+            if (settled) return;
+            // Closed before we got a reply — most likely auth rejected
+            // at handshake (server closes before sending anything).
+            finish(new Error("Daemon refused the connection (token rejected?)"));
+          });
+
+          ws.addEventListener("error", function () { /* close will follow */ });
+        });
+      }
 
       function fail(msg) { errEl.textContent = msg; errEl.hidden = false; }
     })();

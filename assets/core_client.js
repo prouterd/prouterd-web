@@ -1,8 +1,12 @@
 // core_client.js
 //
-// Frontend HTTP + WebSocket client. Daemon URL + bearer token are stored
-// in sessionStorage by login.html. Every fetch / WS open includes the
-// bearer; 401 redirects back to login.
+// Session storage + WS URL helper. The console talks to the daemon
+// over WS-RPC (see ws_client.js); the only HTTP request the SPA makes
+// is the artifact-download anchor, which uses downloadUrl().
+//
+// Daemon URL + bearer token are populated by login.html into
+// sessionStorage and read here. logout() clears both and bounces to
+// the login page.
 
 (function () {
   "use strict";
@@ -38,31 +42,23 @@
     return cfg;
   }
 
-  async function fetchJson(path, opts) {
-    const cfg = requireConfig();
-    const headers = Object.assign({ "Accept": "application/json" }, (opts && opts.headers) || {});
-    if (cfg.token) headers["Authorization"] = "Bearer " + cfg.token;
-    const init = Object.assign({}, opts, { headers });
-    let res;
-    try { res = await fetch(cfg.url + path, init); }
-    catch (e) { throw new Error("network error: " + e.message); }
-
-    if (res.status === 401) { clearConfig(); redirectToLogin(); throw new Error("unauthorized"); }
-    if (res.status === 404) { const e = new Error("not found"); e.status = 404; throw e; }
-    if (!res.ok) {
-      const text = await res.text().catch(function () { return ""; });
-      throw new Error("HTTP " + res.status + (text ? ": " + text : ""));
-    }
-    if (res.status === 204) return null;
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
-    if (ct === "application/json") return await res.json();
-    return await res.text();
-  }
-
   function wsUrl(path) {
     const cfg = requireConfig();
     const wsBase = cfg.url.replace(/^http/, "ws");
     let url = wsBase + path;
+    if (cfg.token) {
+      url += (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(cfg.token);
+    }
+    return url;
+  }
+
+  // The one HTTP touchpoint left: artifact downloads. The browser
+  // navigates to this URL via <a download>, so we embed the bearer in
+  // the query string the same way as the WS handshake.
+  function downloadUrl(path) {
+    const cfg = config();
+    if (!cfg.url) return "";
+    let url = cfg.url + path;
     if (cfg.token) {
       url += (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(cfg.token);
     }
@@ -76,6 +72,6 @@
 
   window.ProuterdCore = {
     config: config, setConfig: setConfig, clearConfig: clearConfig,
-    fetchJson: fetchJson, wsUrl: wsUrl, logout: logout
+    wsUrl: wsUrl, downloadUrl: downloadUrl, logout: logout
   };
 })();

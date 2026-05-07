@@ -2,16 +2,30 @@
 
 Operator console for the [prouterd](../prouterd-core) Process Router — a
 zero-build static SPA. Open `index.html` in any browser, point it at a
-running prouterd-core daemon, and the console talks to it directly over
-HTTP `/v1/*` and two WebSockets (`/v1/events` for live state,
-`/v1/cli/:session_id` for interactive shell sessions). No build step,
-no proxy, no Ruby.
+running prouterd-core daemon, and the console talks to it over a single
+WebSocket plus one anchor for artifact downloads. No build step, no
+proxy, no Ruby.
 
 ```
-Browser  ──HTTP /v1/* (bearer)        ──>  prouterd daemon
-         ──WS  /v1/events (subscribe) ──>  SQLite + runners + scheduler
-         ──WS  /v1/cli/:sid (shell)   ──>
+Browser  ──WS  /v1/events  (RPC + live events,  ?token=)  ──>  prouterd daemon
+         ──WS  /v1/cli/:sid (interactive shell, ?token=)  ──>  SQLite + runners
+         ──HTTP /v1/artifacts/:id/download    (?token=)   ──>  + scheduler
 ```
+
+The daemon's HTTP `/v1/*` API stays in place for `curl`, automation,
+k8s probes, monitoring — the SPA just doesn't use it. Anything the
+console needs goes through one RPC envelope on `/v1/events`:
+
+```jsonc
+// browser → daemon
+{ "id": "msg_42", "type": "call", "payload": { "method": "processes.get", "args": { "name": "lead_pipeline" } } }
+// daemon → browser
+{ "reply_to": "msg_42", "type": "reply", "payload": { /* same as /v1/processes/:name */ } }
+{ "reply_to": "msg_42", "type": "error", "payload": { "code": "not_found", "message": "..." } }
+```
+
+The same socket continues to carry the existing
+`subscribe`/`unsubscribe`/event frames for live updates.
 
 ## Quickstart
 
@@ -40,40 +54,70 @@ tab logs out.
 
 ## What core has to provide
 
-The console talks to the daemon directly from the browser, so the
-daemon must:
+The browser talks to core over WebSocket, with one HTTP anchor for
+artifact downloads. Concretely the daemon must:
 
-- **Allow CORS on `/v1/*`** for the SPA's origin
-  (`Access-Control-Allow-Origin`, `Access-Control-Allow-Headers:
-  Authorization, Content-Type`, `Access-Control-Allow-Methods: GET,
-  POST, OPTIONS`).
-- **Accept the bearer token via a `?token=...` query parameter** on the
-  WebSocket endpoints (`/v1/events`, `/v1/cli/:sid`) and on
-  `/v1/artifacts/:id/download` so plain `<a download>` links work
-  without a custom Authorization header.
+- **WS-RPC envelope on `/v1/events`** alongside the existing
+  `subscribe` / `unsubscribe` / event frames. Two new frame types:
+  - in: `{ id, type: "call", payload: { method, args } }`
+  - out: `{ reply_to, type: "reply"|"error", payload }`
 
-Both are stable, well-trodden patterns — they don't change the
-daemon's HTTP API surface.
+  Methods mirror the existing `/v1/*` HTTP routes 1:1 (same internal
+  services, just dispatched over the socket):
+
+  | method                | what                                    |
+  |-----------------------|-----------------------------------------|
+  | `status`              | daemon status / drift / queue depth     |
+  | `processes.list`      | list processes                          |
+  | `processes.get`       | one process w/ blocks + routes          |
+  | `processes.trigger`   | fire a one-shot event                   |
+  | `interfaces.list`     | declared interfaces                     |
+  | `queues.list`         | runner queues                           |
+  | `policies.list`       | retry policies                          |
+  | `secrets.list`        | declared secrets (no values)            |
+  | `runs.list`           | filter by process / status / paginate   |
+  | `runs.get`            | one run + its steps                     |
+  | `runs.cancel`         | cancel a non-terminal run               |
+  | `runs.replay`         | replay (optional `from_block`)          |
+  | `runs.logs`           | per-run logs (optional `step`/`after`)  |
+  | `runs.artifacts`      | per-run artifact metadata               |
+  | `config.running`      | rendered active config text             |
+  | `config.startup`      | rendered boot config text               |
+  | `config.commits`      | commit history + meta.running/.startup  |
+  | `config.commit`       | one commit + rendered_config            |
+  | `config.rollback`     | rollback running config to commit       |
+  | `config.save_boot`    | promote running → boot                  |
+  | `trace`               | static-trace an event                   |
+
+  Error codes the SPA recognises: `not_found`, `bad_request`,
+  `unauthorized`, anything else is shown verbatim.
+
+- **`?token=...` query auth** on `/v1/events`, `/v1/cli/:session_id`,
+  and `/v1/artifacts/:id/download`. Used as fallback when the
+  `Authorization` header is unavailable (WS handshake from the browser,
+  plain `<a download>` navigation).
+
+CORS isn't needed: WS handshakes aren't subject to it the same way
+fetch is, and the artifact download is plain navigation (no preflight).
 
 ## Layout
 
 ```
 /
-├── index.html              — entry: top-bar / object-tree / workspace
-├── login.html              — daemon URL + bearer token entry
+├── index.html  login.html  README.md  LICENSE  .gitignore
 └── assets/
+    ├── core_client.js      session storage + ws/download URL builders
+    ├── ws_client.js        persistent WS to /v1/events: pub/sub + RPC call()
+    ├── adapter.js          shapes RPC replies into view-model objects
+    ├── json_tree.js        collapsible JSON viewer
+    ├── config_diff.js      line-oriented LCS diff
+    ├── cli_session.js      per-window WS to /v1/cli/:sid
+    ├── window_manager.js   open / drag / resize / persist windows + actions
+    ├── cli.js              CLI window input + history
+    ├── process_graph.js    Graph tab on Process Inspector (SVG, drag)
+    ├── boot.js             top-bar status pills + logout
     ├── app.css
-    ├── core_client.js      — fetch + WS wrapper, bearer from sessionStorage
-    ├── adapter.js          — shapes /v1/* JSON into view-model objects
-    ├── json_tree.js        — collapsible JSON viewer (used by step / context)
-    ├── config_diff.js      — line-oriented LCS diff (used by config / diff)
-    ├── ws_client.js        — persistent WS to /v1/events, topic dispatch
-    ├── cli_session.js      — per-window WS to /v1/cli/:sid
-    ├── window_manager.js   — open / drag / resize / persist windows + actions
-    ├── cli.js              — CLI window input + history
-    ├── process_graph.js    — Graph tab on Process Inspector (SVG, drag)
-    ├── boot.js             — top-bar status pills + logout
-    └── windows/
+    └── windows/            one render(resourceId) per window type
         ├── registry.js
         ├── system.js              processes.js          process_inspector.js
         ├── blocks.js               routes.js             interfaces.js
@@ -84,9 +128,9 @@ daemon's HTTP API surface.
         ├── trace.js                cli.js
 ```
 
-Each window type is a single async function `render(resourceId) =>
-htmlString` registered on `ProuterdWindows`. The window manager calls
-the registry; live-update events trigger a debounced re-render.
+Each window type registers an `async render(resourceId) => htmlString`
+function on `ProuterdWindows`. The window manager calls the registry;
+live-update events trigger a debounced re-render.
 
 ## Features
 
@@ -96,9 +140,8 @@ the registry; live-update events trigger a debounced re-render.
   / secrets — listings + drill-down inspectors
 - **Process Inspector** with a Graph tab — blocks as nodes, routes as
   directed edges, draggable layout per-process
-- Run Inspector — per-step status, captured logs, context (with
-  redaction performed by the daemon), produced artifacts, replay full
-  / from a chosen block
+- Run Inspector — per-step status, captured logs, context, produced
+  artifacts, replay full / from a chosen block
 - Step Inspector — input / output JSON trees, per-step logs, per-step
   artifacts
 - Config viewer — Active / Boot / Draft / Diff / Commits, with
@@ -109,7 +152,8 @@ the registry; live-update events trigger a debounced re-render.
   `/v1/cli/:session_id`
 - Live updates over `/v1/events` — windows debounce-refetch on
   relevant topics
-- Secret values are never displayed — only declared name and source ref
+- Secret values are never displayed — only declared name and source
+  reference
 
 ## Caveats
 
@@ -120,6 +164,10 @@ the registry; live-update events trigger a debounced re-render.
 - **Logs window does full re-fetch on tail events** — bandwidth-heavy
   for very chatty runs. An incremental-append path is on the followup
   list.
+- **In-flight RPC calls are rejected on WS reconnect.** The reconnect
+  itself is automatic and the topic subscription state is restored;
+  any call whose reply was lost will be re-issued by the next
+  `hydrateBody` / action click.
 
 ## License
 
