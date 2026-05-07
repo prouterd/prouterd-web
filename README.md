@@ -1,27 +1,21 @@
 # prouterd-web
 
-Operator console for the [prouterd](../prouterd-core) Process Router.
-
-A standalone Ruby web app that talks to a running prouterd daemon over its
-`/v1` HTTP API plus two WebSocket streams (`/v1/events` for live state,
-`/v1/cli/:session_id` for interactive shell sessions). The console runs
-in its own process — no `prouterd` gem dependency at runtime, no shared
-SQLite handle, no co-location requirement.
+Operator console for the [prouterd](../prouterd-core) Process Router — a
+zero-build static SPA. Open `index.html` in any browser, point it at a
+running prouterd-core daemon, and the console talks to it directly over
+HTTP `/v1/*` and two WebSockets (`/v1/events` for live state,
+`/v1/cli/:session_id` for interactive shell sessions). No build step,
+no proxy, no Ruby.
 
 ```
-Browser  ──HTTP /console + assets──>  prouterd-web (Roda + Puma)
-         ──WS /ws (subscribe/cmd)──>            │
-                                                │ HTTP /v1/* (bearer)
-                                                │ WS  /v1/events (events)
-                                                │ WS  /v1/cli/:sid (shell)
-                                                ▼
-                                       prouterd daemon
-                                       SQLite + runners + scheduler
+Browser  ──HTTP /v1/* (bearer)        ──>  prouterd daemon
+         ──WS  /v1/events (subscribe) ──>  SQLite + runners + scheduler
+         ──WS  /v1/cli/:sid (shell)   ──>
 ```
 
 ## Quickstart
 
-### 1. Run a prouterd daemon (any host, port 9000)
+### 1. Run a prouterd daemon
 
 ```sh
 cd ../prouterd-core
@@ -29,99 +23,104 @@ PROUTERD_ADMIN_TOKEN=demo bundle exec exe/prouterd \
   --db /tmp/prouterd.db --port 9000
 ```
 
-### 2. Run the console
+### 2. Serve the static console
+
+Anything that serves a directory works — `python3`, `npx serve`, nginx,
+GitHub Pages, S3:
 
 ```sh
-cd prouterd-web
-bundle install
-bundle exec exe/prouterd-web \
-  --core-url http://localhost:9000 \
-  --core-token demo \
-  --admin-token "$(openssl rand -hex 16)" \
-  -p 9292
+python3 -m http.server 8080
 ```
 
-Open <http://localhost:9292/console>, sign in with the admin token. The
-left object tree opens windows; double-click row entries to drill down.
+Open <http://localhost:8080/login.html>, enter the daemon URL
+(`http://localhost:9000`) and the bearer token, sign in.
 
-## Configuration
+The console stores `{ url, token }` in `sessionStorage` — closing the
+tab logs out.
 
-| Flag                  | Env var                   | What                                                                        |
-|-----------------------|---------------------------|-----------------------------------------------------------------------------|
-| `--core-url URL`      | `PROUTERD_CORE_URL`        | **Required.** prouterd daemon base URL.                                      |
-| `--core-token TOKEN`  | `PROUTERD_CORE_TOKEN`      | Bearer for `/v1` (sent to the daemon).                                      |
-| `--admin-token TOKEN` | `PROUTERD_WEB_ADMIN_TOKEN`     | Web-console session token (browser ↔ this app). Empty → auth disabled.     |
-| `-p / --port`         |                           | Bind port (default 9292).                                                  |
-| `-H / --host`         |                           | Bind host (default 127.0.0.1).                                             |
+## What core has to provide
 
-Console session cookies are HttpOnly, SameSite=Strict, marked Secure when
-the request was forwarded over HTTPS.
+The console talks to the daemon directly from the browser, so the
+daemon must:
 
-## Architecture
+- **Allow CORS on `/v1/*`** for the SPA's origin
+  (`Access-Control-Allow-Origin`, `Access-Control-Allow-Headers:
+  Authorization, Content-Type`, `Access-Control-Allow-Methods: GET,
+  POST, OPTIONS`).
+- **Accept the bearer token via a `?token=...` query parameter** on the
+  WebSocket endpoints (`/v1/events`, `/v1/cli/:sid`) and on
+  `/v1/artifacts/:id/download` so plain `<a download>` links work
+  without a custom Authorization header.
 
-| Layer                   | What it does                                                            |
-|-------------------------|-------------------------------------------------------------------------|
-| `CoreClient`            | HTTP wrapper over Net::HTTP. Bearer auth, JSON envelope, typed errors.  |
-| `HttpApiAdapter`        | Implements the entire web-side adapter contract over `/v1/*`.           |
-| `EventsConsumer`        | Long-lived WS to `/v1/events`. Fans daemon events into `Broadcaster`.   |
-| `CliBridge`             | WS to `/v1/cli/:sid` per command. Returns synchronous `{exit_code,…}`.  |
-| `Broadcaster`           | In-process pub/sub. Browser WS subscribers fan out from here.           |
-| `WebSocketConnection`   | Per-browser WS handler. Forwards subscribes upstream via EventsConsumer.|
-| `WindowManager` (JS)    | Drag/resize windows, taskbar, layout persistence in `localStorage`.     |
-| `cli.js`                | CLI window: input + history + send `command.exec` over WS.              |
+Both are stable, well-trodden patterns — they don't change the
+daemon's HTTP API surface.
 
-Live updates flow:
+## Layout
 
 ```
-core orchestrator → core Events bus → core WS /v1/events
-        │
-        ▼
-core's WS server pushes "{topic,type,payload}" frames
-        │
-        ▼
-EventsConsumer (this app) decodes → Broadcaster.publish(topic, payload)
-        │
-        ▼
-WebSocketConnection (per browser) forwards to /ws subscribers
-        │
-        ▼
-Browser's window manager calls hydrateBody() → debounced re-fetch
+/
+├── index.html              — entry: top-bar / object-tree / workspace
+├── login.html              — daemon URL + bearer token entry
+└── assets/
+    ├── app.css
+    ├── core_client.js      — fetch + WS wrapper, bearer from sessionStorage
+    ├── adapter.js          — shapes /v1/* JSON into view-model objects
+    ├── json_tree.js        — collapsible JSON viewer (used by step / context)
+    ├── config_diff.js      — line-oriented LCS diff (used by config / diff)
+    ├── ws_client.js        — persistent WS to /v1/events, topic dispatch
+    ├── cli_session.js      — per-window WS to /v1/cli/:sid
+    ├── window_manager.js   — open / drag / resize / persist windows + actions
+    ├── cli.js              — CLI window input + history
+    ├── process_graph.js    — Graph tab on Process Inspector (SVG, drag)
+    ├── boot.js             — top-bar status pills + logout
+    └── windows/
+        ├── registry.js
+        ├── system.js              processes.js          process_inspector.js
+        ├── blocks.js               routes.js             interfaces.js
+        ├── queues.js               policies.js           secrets.js
+        ├── runs.js                 run_inspector.js      step_inspector.js
+        ├── config.js               diff.js
+        ├── logs.js                 context.js            artifacts.js
+        ├── trace.js                cli.js
 ```
+
+Each window type is a single async function `render(resourceId) =>
+htmlString` registered on `ProuterdWindows`. The window manager calls
+the registry; live-update events trigger a debounced re-render.
 
 ## Features
 
-- `/console` UI: object tree on the left, draggable / resizable
-  windows in the workspace, layout persisted in `localStorage`
-- Process and run listings with pagination
-- Run inspector: per-step status, captured logs (live-tailed via
-  the upstream daemon's `/v1/events` WebSocket), context (with
-  redaction), produced artifacts, replay full / from a chosen block
-- Config viewer: active / boot / draft / diff / commit history
-- Trigger a process or trace an event from the UI
-- Embedded CLI window over the daemon's `/v1/cli/:session_id`
+- Object tree on the left, draggable / resizable windows in the
+  workspace, layout persisted in `localStorage`
+- Processes / runs / blocks / routes / interfaces / queues / policies
+  / secrets — listings + drill-down inspectors
+- **Process Inspector** with a Graph tab — blocks as nodes, routes as
+  directed edges, draggable layout per-process
+- Run Inspector — per-step status, captured logs, context (with
+  redaction performed by the daemon), produced artifacts, replay full
+  / from a chosen block
+- Step Inspector — input / output JSON trees, per-step logs, per-step
+  artifacts
+- Config viewer — Active / Boot / Draft / Diff / Commits, with
+  rollback and save-as-boot actions
+- Trace event — statically walk routes for an event without executing
+  blocks
+- Embedded CLI window per session, persistent WS to the daemon's
+  `/v1/cli/:session_id`
+- Live updates over `/v1/events` — windows debounce-refetch on
+  relevant topics
 - Secret values are never displayed — only declared name and source ref
-
-## Tests
-
-```sh
-bundle exec rspec
-```
-
-182 examples. Adapter + protocol unit specs, integration of the full
-App stack against a programmable Rack stub of `/v1`
-(`spec/support/stub_core_app.rb`). Coverage tracks the post-Phase-32
-core JSON envelope: `interface: {type, name}` + `call_fields` +
-`secret_names` on blocks, `retry_when` on policies, plugin-driven
-`fields` + `direction` on interfaces. No daemon required for the suite.
 
 ## Caveats
 
-- **Single-worker Puma only.** In cluster mode (`puma -w N`) each worker
-  would open its own `EventsConsumer` WS to the daemon and drive its own
-  EventMachine reactor; events would be duplicated across browsers depending
-  on which worker they hit. Document fix or single-master pattern coming.
-- **CSP** not yet in default security headers — `X-Frame-Options: DENY`,
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` are.
-- **CliBridge opens a fresh WS per command.** Adds ~50 ms handshake
-  overhead on every Enter; persistent-per-session connection is on the
-  followup list.
+- **Bearer in `sessionStorage`** — the standard SPA tradeoff. XSS in
+  the console code would leak the token. Acceptable for an operator
+  tool on a trusted network; for internet-facing deploys, the daemon
+  should grow a cookie-session login.
+- **Logs window does full re-fetch on tail events** — bandwidth-heavy
+  for very chatty runs. An incremental-append path is on the followup
+  list.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
