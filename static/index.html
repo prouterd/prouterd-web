@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prouterd Web Console</title>
+  <link rel="stylesheet" href="assets/app.css">
+
+  <script src="assets/core_client.js"            defer></script>
+  <script src="assets/adapter.js"                defer></script>
+  <script src="assets/windows/registry.js"       defer></script>
+  <script src="assets/windows/system.js"         defer></script>
+  <script src="assets/windows/processes.js"      defer></script>
+  <script src="assets/windows/process_inspector.js" defer></script>
+  <script src="assets/windows/runs.js"           defer></script>
+  <script src="assets/windows/run_inspector.js"  defer></script>
+  <script src="assets/window_manager.js"         defer></script>
+  <script src="assets/ws_client.js"              defer></script>
+  <script src="assets/cli.js"                    defer></script>
+  <script src="assets/process_graph.js"          defer></script>
+  <script src="assets/boot.js"                   defer></script>
+</head>
+<body>
+  <header class="top-bar" role="banner">
+    <div class="top-bar__left">
+      <span class="top-bar__brand">Process Router</span>
+      <span class="top-bar__router" id="top-bar-router">…</span>
+    </div>
+    <div class="top-bar__right">
+      <span class="top-bar__stat" id="top-bar-active">active: #—</span>
+      <span class="top-bar__stat" id="top-bar-boot">boot: #—</span>
+      <span class="top-bar__stat" id="top-bar-drift">drift: —</span>
+      <span class="top-bar__stat" id="top-bar-workers">workers: —</span>
+      <span class="top-bar__stat" id="top-bar-queue">queue: —</span>
+      <span class="top-bar__health top-bar__health--warn">● connecting</span>
+      <a href="#" id="top-bar-logout" class="top-bar__stat">logout</a>
+    </div>
+  </header>
+
+  <main class="console">
+    <aside class="object-tree" aria-label="Object tree">
+      <div class="object-tree__header">Router</div>
+      <ul class="object-tree__list">
+        <li><a href="#" data-window-type="interfaces">Interfaces</a></li>
+        <li><a href="#" data-window-type="routes">Routes</a></li>
+        <li><a href="#" data-window-type="processes">Processes</a></li>
+        <li><a href="#" data-window-type="blocks">Blocks</a></li>
+        <li><a href="#" data-window-type="runs">Runs</a></li>
+        <li><a href="#" data-window-type="queues">Queues</a></li>
+        <li><a href="#" data-window-type="policies">Policies</a></li>
+        <li><a href="#" data-window-type="secrets">Secrets</a></li>
+        <li><a href="#" data-window-type="config">Config</a></li>
+        <li><a href="#" data-window-type="logs">Logs</a></li>
+        <li><a href="#" data-window-type="artifacts">Artifacts</a></li>
+        <li><a href="#" data-window-type="trace">Trace event</a></li>
+        <li><a href="#" data-window-type="system">System</a></li>
+      </ul>
+    </aside>
+    <section class="workspace" id="workspace" aria-label="Workspace">
+      <div class="workspace__placeholder" id="workspace-placeholder">
+        <p class="workspace__title">workspace</p>
+        <p class="workspace__hint">click an object on the left to open it in a window</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="taskbar" id="taskbar" role="contentinfo">
+    <span class="taskbar__empty" id="taskbar-empty">no open windows</span>
+    <div class="taskbar__entries" id="taskbar-entries"></div>
+    <div class="taskbar__actions">
+      <button type="button" id="reset-workspace-btn" class="taskbar__btn"
+              title="Close all windows and clear saved layout">Reset</button>
+    </div>
+  </footer>
+</body>
+</html>

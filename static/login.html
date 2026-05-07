@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Prouterd Web Console</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="login-page">
+  <main class="login">
+    <h1 class="login__title">Process Router</h1>
+    <p class="login__subtitle">Web Console</p>
+
+    <div class="login__error" id="login-error" hidden></div>
+
+    <form id="login-form" class="login__form" autocomplete="off">
+      <label for="login-url" class="login__label">Daemon URL</label>
+      <input id="login-url" name="url" type="url" class="login__input"
+             placeholder="http://localhost:9000" required>
+
+      <label for="login-token" class="login__label">Bearer token</label>
+      <input id="login-token" name="token" type="password" class="login__input"
+             autofocus>
+
+      <button type="submit" class="login__btn">Sign in</button>
+    </form>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      const STORAGE_KEY = "prouterd.core";
+
+      let prefill = {};
+      try { prefill = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}"); }
+      catch (e) {}
+
+      const urlEl   = document.getElementById("login-url");
+      const tokenEl = document.getElementById("login-token");
+      const errEl   = document.getElementById("login-error");
+      urlEl.value   = prefill.url   || "";
+      tokenEl.value = prefill.token || "";
+
+      document.getElementById("login-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        errEl.hidden = true;
+        const url   = urlEl.value.replace(/\/+$/, "");
+        const token = tokenEl.value;
+        if (!url) { fail("Daemon URL is required"); return; }
+
+        try {
+          const headers = { "Accept": "application/json" };
+          if (token) headers["Authorization"] = "Bearer " + token;
+          const res = await fetch(url + "/v1/status", { headers });
+          if (res.status === 401) { fail("Invalid token"); return; }
+          if (!res.ok)            { fail("HTTP " + res.status); return; }
+          await res.json();
+        } catch (err) {
+          fail("Cannot reach daemon: " + err.message);
+          return;
+        }
+
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url: url, token: token }));
+        const next = new URLSearchParams(window.location.search).get("next") || "index.html";
+        window.location.href = next;
+      });
+
+      function fail(msg) { errEl.textContent = msg; errEl.hidden = false; }
+    })();
+  </script>
+</body>
+</html>
