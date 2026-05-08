@@ -636,6 +636,16 @@
         const block = el.dataset.fromBlock;
         if (!block) return;
         result = await window.ProuterdAdapter.replayRun(uid, block);
+      } else if (action === "resume") {
+        const raw = prompt(
+          "Resume value (JSON, defaults to {}):",
+          el.dataset.resumeDefault || "{}"
+        );
+        if (raw == null) return;
+        let value;
+        try { value = JSON.parse(raw); }
+        catch (e) { alert("invalid JSON: " + e.message); return; }
+        result = await window.ProuterdAdapter.resumeRun(uid, value);
       } else {
         return;
       }

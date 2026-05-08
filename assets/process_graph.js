@@ -158,26 +158,38 @@
     });
 
     const nodeEls = nodes.map(function (n) {
+      const kind = n.kind || "block";
+      const cls = ["pg-node", "pg-node--kind-" + kind];
+      if (n.entry) cls.push("pg-node--entry");
+      if (n.agentic)   cls.push("pg-node--agentic");
+      if (n.fan_out)   cls.push("pg-node--fanout");
+      if (n.skip_when) cls.push("pg-node--skipwhen");
       const g = el("g", {
-        class: "pg-node" + (n.entry ? " pg-node--entry" : ""),
+        class: cls.join(" "),
         "data-node-id": n.id
       });
       g.appendChild(el("rect", {
         class: "pg-node-rect pg-node-rect--" + (n.status || "ready"),
-        width: NODE_W, height: NODE_H, rx: 4
+        width: NODE_W, height: NODE_H, rx: kind === "barrier" ? 14 : 4
       }));
       const label = el("text", {
         class: "pg-node-text", x: NODE_W / 2, y: 18, "text-anchor": "middle"
       });
       label.textContent = n.label;
       g.appendChild(label);
-      if (n.interface) {
-        const sub = el("text", {
+      // Sub-line: barrier shows "parallel · <strategy>"; pause shows
+      // "pause"; otherwise the interface label.
+      let sub = null;
+      if (kind === "barrier") sub = "parallel barrier";
+      else if (kind === "pause") sub = "pause";
+      else if (n.interface) sub = n.interface;
+      if (sub) {
+        const subEl = el("text", {
           class: "pg-node-text pg-node-text--sub",
           x: NODE_W / 2, y: 34, "text-anchor": "middle"
         });
-        sub.textContent = n.interface;
-        g.appendChild(sub);
+        subEl.textContent = sub;
+        g.appendChild(subEl);
       }
       nodeLayer.appendChild(g);
       return { spec: n, el: g };

@@ -19,8 +19,11 @@
       +     '<span><b>duration</b> ' + (r.duration_ms == null ? "—" : esc(r.duration_ms + " ms")) + '</span>'
       +     '<span><b>config</b> #' + (r.config_commit == null ? "—" : esc(r.config_commit)) + '</span>'
       +     '<span><b>trigger</b> ' + (r.trigger == null ? "—" : esc(r.trigger)) + '</span>'
+      +     (r.thread_id ? '<span><b>thread</b> ' + esc(r.thread_id) + '</span>' : "")
+      +     ((r.tokens_in || r.tokens_out) ? '<span><b>tokens</b> ' + esc(r.tokens_in) + ' ↑ / ' + esc(r.tokens_out) + ' ↓</span>' : "")
       +     (r.replay_of ? '<span><b>replay of</b> <a href="#" data-open-window="run" data-open-resource="' + esc(r.replay_of) + '">' + esc(r.replay_of) + '</a></span>' : "")
       +   '</div>'
+      +   (r.status === "paused" ? resumeAction(r.run_uid) : "")
       + '</header>'
       + '<nav class="tabs" role="tablist">'
       +   '<button type="button" class="tab tab--active" data-tab="summary">Summary</button>'
@@ -34,6 +37,13 @@
       + '</div>';
   });
 
+  function resumeAction(uid) {
+    return '<div class="inspector-header__actions">' +
+      '<button type="button" class="action__btn" data-run-action="resume" ' +
+        'data-run-uid="' + esc(uid) + '">Resume run…</button>' +
+      '</div>';
+  }
+
   function summaryTable(r) {
     function row(k, v, raw) {
       const cell = v == null ? "—" : (raw ? v : esc(v));
@@ -42,10 +52,13 @@
     return '<table class="kv-table"><tbody>' +
       row("Run",           r.run_uid) +
       row("Process",       r.process_name) +
+      row("Thread",        r.thread_id) +
       row("Status",        '<span class="status-' + esc(r.status) + '">' + esc(r.status) + '</span>', true) +
       row("Started",       r.started_at) +
       row("Finished",      r.finished_at) +
       row("Duration",      r.duration_ms == null ? null : r.duration_ms + " ms") +
+      row("Tokens in",     r.tokens_in  ? esc(r.tokens_in)  : null, true) +
+      row("Tokens out",    r.tokens_out ? esc(r.tokens_out) : null, true) +
       row("Config commit", r.config_commit == null ? null : "#" + r.config_commit) +
       row("Trigger",       r.trigger) +
       row("Interface",     r.interface_name) +

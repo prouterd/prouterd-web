@@ -14,7 +14,10 @@
       nodes: p.blocks.map(function (b) {
         return {
           id: b.name, label: b.name, interface: b.interface_label,
-          status: b.status, entry: b.name === p.entry_block
+          status: b.status, entry: b.name === p.entry_block,
+          // Phase-37 markers for graph rendering.
+          kind: b.pause_reason ? "pause" : (b.barrier ? "barrier" : "block"),
+          agentic: !!b.agentic, fan_out: !!b.fan_out, skip_when: !!b.skip_when
         };
       }),
       edges: p.routes.map(function (r) {
@@ -22,7 +25,8 @@
           from: r.from, to: r.to, condition: r.condition,
           on_failure: !!r.on_failure, enabled: r.enabled
         };
-      })
+      }),
+      parallel_groups: (p.parallel_groups || [])
     };
 
     return ''
@@ -35,6 +39,8 @@
       +     '<span><b>entry</b> '       + (p.entry_block == null ? "—" : esc(p.entry_block)) + '</span>'
       +     '<span><b>blocks</b> '      + esc(p.blocks.length) + '</span>'
       +     '<span><b>routes</b> '      + esc(p.routes.length) + '</span>'
+      +     (p.thread_id_template ? '<span><b>thread-id</b> <code>' + esc(p.thread_id_template) + '</code></span>' : "")
+      +     ((p.parallel_groups || []).length ? '<span><b>parallel</b> ' + esc(p.parallel_groups.length) + '</span>' : "")
       +     '<span><b>last run</b> <span class="status-' + esc(p.last_status) + '">' + (p.last_status == null ? "—" : esc(p.last_status)) + '</span></span>'
       +   '</div>'
       + '</header>'
@@ -53,9 +59,17 @@
       +     row("Description", p.description)
       +     row("Status",      '<span class="status-' + esc(p.status) + '">' + esc(p.status) + '</span>', true)
       +     row("Queue",       p.queue)
+      +     row("Thread-id",   p.thread_id_template ? '<code>' + esc(p.thread_id_template) + '</code>' : null, true)
       +     row("Entry block", p.entry_block)
       +     row("Blocks",      p.blocks.length)
       +     row("Routes",      p.routes.length)
+      +     ((p.parallel_groups || []).length
+            ? row("Parallel groups",
+                  p.parallel_groups.map(function (g) {
+                    return '<code>' + esc(g.name) + '</code> [' + esc(g.join_strategy) + ']: ' +
+                           g.members.map(esc).join(", ");
+                  }).join("<br>"), true)
+            : "")
       +     row("Last status", '<span class="status-' + esc(p.last_status) + '">' + (p.last_status == null ? "—" : esc(p.last_status)) + '</span>', true)
       +   '</tbody></table>'
       + '</div>'

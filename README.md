@@ -79,8 +79,10 @@ artifact downloads. Concretely the daemon must:
   | `runs.get`            | one run + its steps                     |
   | `runs.cancel`         | cancel a non-terminal run               |
   | `runs.replay`         | replay (optional `from_block`)          |
+  | `runs.resume`         | resume a paused run with `value` (JSON) |
   | `runs.logs`           | per-run logs (optional `step`/`after`)  |
   | `runs.artifacts`      | per-run artifact metadata               |
+  | `tools.list`          | top-level `tool <name>` declarations    |
   | `config.running`      | rendered active config text             |
   | `config.startup`      | rendered boot config text               |
   | `config.commits`      | commit history + meta.running/.startup  |

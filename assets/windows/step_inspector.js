@@ -18,6 +18,9 @@
     ]);
     if (!step) return '<div class="window-error">step ' + esc(stepId) + ' not found in run ' + esc(runUid) + '</div>';
 
+    const toolCalls = (step.output_json && Array.isArray(step.output_json.tool_calls))
+      ? step.output_json.tool_calls : null;
+
     return ''
       + '<header class="inspector-header">'
       +   '<div class="inspector-header__title">Step ' + esc(step.id) + ': ' + esc(step.block_name) + ' · run ' + esc(runUid) + '</div>'
@@ -40,6 +43,7 @@
       + '<nav class="tabs" role="tablist">'
       +   '<button type="button" class="tab tab--active" data-tab="input">Input</button>'
       +   '<button type="button" class="tab"             data-tab="output">Output</button>'
+      +   (toolCalls ? '<button type="button" class="tab" data-tab="tools">Tool calls (' + toolCalls.length + ')</button>' : "")
       +   '<button type="button" class="tab"             data-tab="logs">Logs</button>'
       +   '<button type="button" class="tab"             data-tab="artifacts">Artifacts</button>'
       + '</nav>'
@@ -50,6 +54,7 @@
             (step.output_json == null ? '<div class="logs__empty">no output recorded</div>' : window.ProuterdJsonTree.render(step.output_json)) +
             (step.error_message ? '<div class="step__error"><div class="step__error-label">Error message</div><pre class="step__error-body">' + esc(step.error_message) + '</pre></div>' : "") +
         '</div>'
+      + (toolCalls ? '<div class="tab-panel" data-tab-panel="tools" hidden>' + renderToolCalls(toolCalls) + '</div>' : "")
       + '<div class="tab-panel" data-tab-panel="logs" hidden>' +
             renderLogs(stepLogs, true) +
         '</div>'
@@ -57,6 +62,36 @@
             renderStepArtifacts(stepArtifacts) +
         '</div>';
   });
+
+  // Render the tool_calls history collected during an agentic block run.
+  // Each entry is a {name, input, output, error?} hash; show them as a
+  // numbered timeline with collapsible JSON for input + output.
+  function renderToolCalls(calls) {
+    if (!calls.length) {
+      return '<div class="logs__empty">no tool calls</div>';
+    }
+    let out = '<div class="tool-calls">';
+    calls.forEach(function (c, i) {
+      const errClass = c.error ? " tool-call--error" : "";
+      out += '<div class="tool-call' + errClass + '">';
+      out +=   '<div class="tool-call__head">';
+      out +=     '<span class="tool-call__index">#' + (i + 1) + '</span>';
+      out +=     '<span class="tool-call__name">' + esc(c.name || "?") + '</span>';
+      if (c.error) out += '<span class="tool-call__error">' + esc(c.error) + '</span>';
+      out +=   '</div>';
+      out +=   '<div class="tool-call__body">';
+      out +=     '<div class="tool-call__pane"><div class="tool-call__label">input</div>' +
+                  (c.input == null ? '<div class="logs__empty">∅</div>' : window.ProuterdJsonTree.render(c.input)) +
+                '</div>';
+      out +=     '<div class="tool-call__pane"><div class="tool-call__label">output</div>' +
+                  (c.output == null ? '<div class="logs__empty">∅</div>' : window.ProuterdJsonTree.render(c.output)) +
+                '</div>';
+      out +=   '</div>';
+      out += '</div>';
+    });
+    out += '</div>';
+    return out;
+  }
 
   function renderLogs(logs, single) {
     if (logs.length === 0) {

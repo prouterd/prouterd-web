@@ -16,23 +16,30 @@
     ]);
     const limit  = params.limit;
     const offset = params.offset;
-    const filter = params.process_name || null;
+    const filter = {
+      process:   params.process_name || null,
+      thread_id: params.thread_id    || null
+    };
 
     let out = '<table class="data-table">' +
       '<thead><tr>' +
-        '<th>Run</th><th>Process</th><th>Status</th>' +
-        '<th>Duration</th><th>Started</th><th>Trigger</th>' +
+        '<th>Run</th><th>Process</th><th>Thread</th><th>Status</th>' +
+        '<th>Duration</th><th>Tokens</th><th>Started</th><th>Trigger</th>' +
       '</tr></thead><tbody>';
     if (runs.length === 0) {
-      out += '<tr><td colspan="6" class="data-table__empty">No runs yet.</td></tr>';
+      out += '<tr><td colspan="8" class="data-table__empty">No runs yet.</td></tr>';
     } else {
       runs.forEach(function (r) {
+        const tokens = (r.tokens_in || r.tokens_out)
+          ? (r.tokens_in + " ↑ / " + r.tokens_out + " ↓") : "—";
         out += '<tr class="data-table__row--clickable" data-open-window="run" ' +
                'data-open-resource="' + esc(r.run_uid) + '">' +
           "<td>" + esc(r.run_uid) + "</td>" +
           "<td>" + esc(r.process_name) + "</td>" +
+          "<td>" + (r.thread_id == null ? "—" : esc(r.thread_id)) + "</td>" +
           '<td class="status-' + esc(r.status) + '">' + esc(r.status) + '</td>' +
           "<td>" + (r.duration_ms == null ? "—" : esc(r.duration_ms + " ms")) + "</td>" +
+          "<td>" + esc(tokens) + "</td>" +
           "<td>" + (r.started_at  == null ? "—" : esc(r.started_at)) + "</td>" +
           "<td>" + (r.trigger     == null ? "—" : esc(r.trigger)) + "</td>" +
           "</tr>";
@@ -47,11 +54,15 @@
     const shownFrom = runs.length === 0 ? 0 : offset + 1;
     const shownTo   = offset + runs.length;
 
+    const filterLabel = [
+      filter.process   ? "process: " + esc(filter.process)   : null,
+      filter.thread_id ? "thread: "  + esc(filter.thread_id) : null
+    ].filter(Boolean).join(" · ");
     out += '<footer class="pagination">' +
       '<span class="pagination__info">' +
         (total === 0 ? "0 runs" :
           "runs " + shownFrom + "–" + shownTo + " of " + total +
-          (filter ? " · process: " + esc(filter) : "")) +
+          (filterLabel ? " · " + filterLabel : "")) +
       '</span>' +
       '<span class="pagination__buttons">' +
         pageBtn("first", offset === 0,             buildResource(filter, limit, 0)) +
@@ -76,6 +87,7 @@
     const lim = parseInt(sp.get("limit"),  10); if (!isNaN(lim) && lim > 0) out.limit  = lim;
     const off = parseInt(sp.get("offset"), 10); if (!isNaN(off) && off >= 0) out.offset = off;
     const proc = sp.get("process"); if (proc) out.process_name = proc;
+    const tid  = sp.get("thread_id"); if (tid) out.thread_id = tid;
     return out;
   }
 
@@ -83,7 +95,8 @@
     const sp = new URLSearchParams();
     sp.set("limit", String(limit));
     sp.set("offset", String(offset));
-    if (filter) sp.set("process", filter);
+    if (filter && filter.process) sp.set("process", filter.process);
+    if (filter && filter.thread_id) sp.set("thread_id", filter.thread_id);
     return sp.toString();
   }
 })();

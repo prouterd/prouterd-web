@@ -82,7 +82,14 @@
       call_summary: summarizeCallFields(iface.type, cf),
       timeout_ms: b.timeout_ms, retry_policy: b.retry_policy,
       contract: b.contract, secret_names: b.secret_names || [],
-      status: b.shutdown ? "disabled" : "ready"
+      status: b.shutdown ? "disabled" : "ready",
+      // Phase-37 directives.
+      skip_when: b.skip_when || null,         // {path, operator, values} | null
+      vars: b.vars || {},                     // Hash<name, template>
+      fan_out: b.fan_out || null,             // {from, into} | null
+      agentic: b.agentic || null,             // {allowed_tools, tool_call_limit} | null
+      pause_reason: b.pause_reason || null,   // string | null  → no interface dispatch
+      barrier: b.barrier || null              // {for, join_strategy} | null  → synthesized parallel barrier
     };
   }
   function processRouteToHash(r, processName) {
@@ -97,7 +104,10 @@
     return {
       run_uid: r.uid, process_name: r.process_name, status: r.status,
       duration_ms: r.duration_ms, started_at: r.started_at, finished_at: r.finished_at,
-      config_commit: r.commit_id, trigger: r.interface_name, replay_of: r.replay_of_uid
+      config_commit: r.commit_id, trigger: r.interface_name, replay_of: r.replay_of_uid,
+      thread_id: r.thread_id || null,
+      tokens_in:  typeof r.tokens_in  === "number" ? r.tokens_in  : 0,
+      tokens_out: typeof r.tokens_out === "number" ? r.tokens_out : 0
     };
   }
   function stepToHash(s) {
@@ -165,10 +175,14 @@
       name: payload.name, description: payload.description,
       status: payload.shutdown ? "disabled" : "enabled",
       queue: payload.queue,
+      thread_id_template: payload.thread_id_template || null,
       entry_block: (payload.blocks || [])[0] && payload.blocks[0].name,
       last_status: null, success_rate: null,
       blocks: (payload.blocks || []).map(blockToHash),
-      routes: (payload.routes || []).map(function (r) { return processRouteToHash(r, payload.name); })
+      routes: (payload.routes || []).map(function (r) { return processRouteToHash(r, payload.name); }),
+      parallel_groups: (payload.parallel_groups || []).map(function (g) {
+        return { name: g.name, join_strategy: g.join_strategy, members: g.members || [] };
+      })
     };
   }
 
@@ -220,7 +234,24 @@
         name: p.name, retry_attempts: p.retry_attempts, retry_backoff: p.retry_backoff,
         retry_initial_delay_ms: p.retry_initial_delay_ms,
         retry_max_delay_ms: p.retry_max_delay_ms,
-        retry_when: p.retry_when, timeout_ms: p.timeout_ms
+        retry_when: p.retry_when, retry_feedback: p.retry_feedback || [],
+        timeout_ms: p.timeout_ms
+      };
+    });
+  }
+  async function listTools() {
+    const data = (await call("tools.list")).data || [];
+    return data.map(function (t) {
+      const impl = t.implementation || {};
+      return {
+        name: t.name, description: t.description,
+        args: t.args || [],
+        impl_iface_type: impl.iface_type || null,
+        impl_iface_name: impl.iface_name || null,
+        impl_call_name:  impl.call_name  || null,
+        impl_label: (impl.iface_type && impl.iface_name)
+          ? impl.iface_type + " " + impl.iface_name + " · " + (impl.call_name || "?")
+          : null
       };
     });
   }
@@ -239,6 +270,7 @@
     const args = {};
     if (filters.process_name || filters.process) args.process = filters.process_name || filters.process;
     if (filters.status) args.status = filters.status;
+    if (filters.thread_id) args.thread_id = filters.thread_id;
     if (filters.limit  != null) args.limit  = filters.limit;
     if (filters.offset != null) args.offset = filters.offset;
     const rows = (await call("runs.list", args)).data || [];
@@ -249,6 +281,7 @@
     filters = filters || {};
     const args = { limit: 1000 };
     if (filters.process_name || filters.process) args.process = filters.process_name || filters.process;
+    if (filters.thread_id) args.thread_id = filters.thread_id;
     return ((await call("runs.list", args)).data || []).length;
   }
 
@@ -395,6 +428,19 @@
       return { error: e.message };
     }
   }
+  async function resumeRun(uid, value) {
+    const args = { uid: uid };
+    if (value !== undefined) args.value = value;
+    try {
+      const p = await call("runs.resume", args);
+      const data = p && p.data;
+      if (data) return { run_uid: data.run_id, status: data.status };
+      return { error: (p && p.error) || "resume failed" };
+    } catch (e) {
+      if (e.code === "not_found") return null;
+      return { error: e.message };
+    }
+  }
   async function rollbackConfig(commitId) {
     try {
       const p = await call("config.rollback", { commit_id: Number(commitId) });
@@ -428,6 +474,7 @@
     listRoutes: listRoutes, listBlocks: listBlocks,
     listInterfaces: listInterfaces, listQueues: listQueues,
     listPolicies: listPolicies, listSecrets: listSecrets,
+    listTools: listTools,
     listRuns: listRuns, countRuns: countRuns,
     getRun: getRun, getRunSteps: getRunSteps,
     getStep: getStep, getRunContext: getRunContext,
@@ -436,6 +483,7 @@
     activeConfig: activeConfig, bootConfig: bootConfig,
     listCommits: listCommits, getCommit: getCommit, configDiff: configDiff,
     triggerProcess: triggerProcess, cancelRun: cancelRun, replayRun: replayRun,
+    resumeRun: resumeRun,
     rollbackConfig: rollbackConfig, saveBootConfig: saveBootConfig,
     traceEvent: traceEvent
   };
