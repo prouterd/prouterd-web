@@ -282,8 +282,25 @@
       if (cur) hydrateBody(cur);
     }, 250);
 
+    // If the renderer registered an incremental appender, try it
+    // first. The appender returns true when it handled the event in
+    // place; false / throw means the default debounced re-hydrate
+    // takes over. Lets the Logs window append a single line per
+    // log.appended event instead of refetching the whole buffer.
+    const appender = window.ProuterdWindows && window.ProuterdWindows.appender
+      ? window.ProuterdWindows.appender(ws.type)
+      : null;
+
     ws.unsubscribers = topics.map(function (topic) {
-      return window.ProuterdWS.subscribe(topic, refresh);
+      return window.ProuterdWS.subscribe(topic, function (payload, eventTopic) {
+        if (appender) {
+          let handled = false;
+          try { handled = appender(ws, payload, eventTopic) === true; }
+          catch (e) { handled = false; }
+          if (handled) return;
+        }
+        refresh();
+      });
     });
   }
 

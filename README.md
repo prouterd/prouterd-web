@@ -172,6 +172,24 @@ live-update events trigger a debounced re-render.
   any call whose reply was lost will be re-issued by the next
   `hydrateBody` / action click.
 
+## Tests
+
+```sh
+node --test tests/
+```
+
+`tests/adapter.test.mjs` runs `assets/adapter.js` inside a `node:vm`
+sandbox with stubbed `window.ProuterdWS.call` and exercises the
+shaping methods against canned RPC payloads — no browser, no jsdom.
+Catches shape regressions (renamed wire field, swapped types,
+dropped key) without booting the SPA.
+
+CI runs three checks on every PR (see `.github/workflows/check.yml`):
+- `node --check` on every `.js` / `.mjs` (syntax)
+- `node --test tests/` (shaping)
+- referenced script paths in `index.html` exist (catches asset path
+  drift after a rename)
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

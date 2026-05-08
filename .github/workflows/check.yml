@@ -1,0 +1,52 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    name: node --check (every JS file)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: |
+          set -e
+          fail=0
+          while IFS= read -r -d '' f; do
+            node --check "$f" || fail=1
+          done < <(find assets tests -type f -name '*.js' -print0; find tests -type f -name '*.mjs' -print0 2>/dev/null)
+          exit "$fail"
+
+  tests:
+    name: adapter shaping tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: node --test tests/
+
+  html:
+    name: HTML present + script paths exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          for html in index.html login.html; do
+            test -f "$html" || { echo "missing $html"; exit 1; }
+          done
+          # Every <script src="..."> referenced from index.html must exist.
+          missing=0
+          while IFS= read -r src; do
+            [ -z "$src" ] && continue
+            if [ ! -f "$src" ]; then
+              echo "missing referenced script: $src"
+              missing=1
+            fi
+          done < <(grep -oP 'src="\K[^"]+' index.html)
+          exit "$missing"

@@ -9,8 +9,21 @@
   "use strict";
 
   const renderers = {};
+  const appenders = {};
 
   function register(type, fn) { renderers[type] = fn; }
+
+  // Optional incremental-update path. When a window subscribes to a
+  // live topic, by default each event triggers a full re-render via
+  // hydrateBody. A renderer may opt into incremental mode by also
+  // registering an appender — invoked with (ws, eventPayload, topic).
+  // Return true to indicate the event was handled (skip the full
+  // refresh); false / throw to fall back to the default debounced
+  // hydrateBody. Used by the Logs window so chatty runs don't refetch
+  // the entire log buffer on every appended line.
+  function registerAppender(type, fn) { appenders[type] = fn; }
+
+  function appender(type) { return appenders[type]; }
 
   async function render(type, resourceId) {
     const fn = renderers[type];
@@ -72,7 +85,9 @@
   }
 
   window.ProuterdWindows = {
-    register: register, render: render, escapeHtml: escapeHtml,
+    register: register, registerAppender: registerAppender,
+    render: render, appender: appender,
+    escapeHtml: escapeHtml,
     blockKindLabel: blockKindLabel, blockBadges: blockBadges
   };
 })();

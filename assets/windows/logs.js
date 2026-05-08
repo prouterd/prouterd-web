@@ -14,12 +14,64 @@
       + '<header class="inspector-header">'
       +   '<div class="inspector-header__title">Logs: ' + esc(runUid) + (stepId ? " · step " + esc(stepId) : "") + '</div>'
       +   '<div class="inspector-header__meta">'
-      +     '<span><b>entries</b> ' + esc(logs.length) + '</span>'
-      +     '<span><b>streams</b> ' + esc(streams) + '</span>'
+      +     '<span><b>entries</b> <span data-logs-count>' + esc(logs.length) + '</span></span>'
+      +     '<span><b>streams</b> <span data-logs-streams>' + esc(streams) + '</span></span>'
       +     '<span><a href="#" data-open-window="run" data-open-resource="' + esc(runUid) + '">open run inspector</a></span>'
       +   '</div>'
       + '</header>'
       + renderLogsBody(logs, !!stepId);
+  });
+
+  // Incremental tail. log.appended events on the logs:<uid> topic
+  // already carry the full entry (run_uid, step_id, stream, content,
+  // created_at) so we append a single line in place instead of
+  // re-fetching the whole buffer. Falls back to debounced re-hydrate
+  // when the body isn't ready (e.g. window opened mid-event), see
+  // window_manager.js attachLiveSubscriptions.
+  W.registerAppender("logs", function (ws, payload, topic) {
+    if (!String(topic || "").startsWith("logs:")) return false;
+    const el = document.getElementById(ws.id);
+    if (!el) return false;
+    const body = el.querySelector(".window__body");
+    if (!body) return false;
+    const container = body.querySelector(".logs");
+    if (!container) return false;
+
+    // Filter to this window's step, if any (resource is "<uid>" or
+    // "<uid>/<step>").
+    const m = String(ws.resourceId || "").split("/");
+    const wantStep = m[1] != null && m[1] !== "" ? Number(m[1]) : null;
+    if (wantStep != null && Number(payload.step_id) !== wantStep) return true;
+
+    // Drop the empty-state placeholder on first real entry.
+    const empty = container.querySelector(".logs__empty");
+    if (empty) empty.remove();
+
+    const stream = payload.stream || "stdout";
+    const line = document.createElement("div");
+    line.className = "logs__line logs__line--" + stream.replace(/[^A-Za-z0-9_-]/g, "");
+    let html = '<span class="logs__ts">'      + esc(formatTs(payload.created_at)) + '</span>' +
+               '<span class="logs__stream">'  + esc(stream) + '</span>';
+    if (wantStep == null) {
+      html += '<span class="logs__step">step ' +
+        (payload.step_id == null ? "—" : esc(payload.step_id)) + '</span>';
+    }
+    html += '<span class="logs__content">' + esc(payload.content || "") + '</span>';
+    line.innerHTML = html;
+    container.appendChild(line);
+
+    // Update the entries-count pill.
+    const countEl = body.querySelector("[data-logs-count]");
+    if (countEl) {
+      const next = (parseInt(countEl.textContent, 10) || 0) + 1;
+      countEl.textContent = String(next);
+    }
+
+    // Auto-scroll if the operator was already pinned to the bottom.
+    const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+    if (nearBottom) body.scrollTop = body.scrollHeight;
+
+    return true;
   });
 
   function renderLogsBody(logs, hideStep) {
