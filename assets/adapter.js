@@ -86,10 +86,11 @@
       // Phase-37 directives.
       skip_when: b.skip_when || null,         // {path, operator, values} | null
       vars: b.vars || {},                     // Hash<name, template>
-      fan_out: b.fan_out || null,             // {from, into} | null
+      fan_out: b.fan_out || null,             // {from, into, maps, dedupe, rate_limit} | null
       agentic: b.agentic || null,             // {allowed_tools, tool_call_limit} | null
       pause_reason: b.pause_reason || null,   // string | null  → no interface dispatch
-      barrier: b.barrier || null              // {for, join_strategy} | null  → synthesized parallel barrier
+      barrier: b.barrier || null,             // {for, join_strategy} | null  → synthesized parallel barrier
+      max_cost_usd: typeof b.max_cost_usd === "number" ? b.max_cost_usd : null
     };
   }
   function processRouteToHash(r, processName) {
@@ -238,9 +239,33 @@
         retry_initial_delay_ms: p.retry_initial_delay_ms,
         retry_max_delay_ms: p.retry_max_delay_ms,
         retry_when: p.retry_when, retry_feedback: p.retry_feedback || [],
+        retry_stop: p.retry_stop || [],
         timeout_ms: p.timeout_ms
       };
     });
+  }
+  async function listPrices() {
+    let payload;
+    try { payload = (await call("config.running")); }
+    catch (e) { return []; }
+    // `prices <provider>` lives only in the rendered config text right
+    // now (no dedicated /v1/prices endpoint). Parse a minimal subset:
+    // `prices <provider>` opener + `model <name> in X out Y` lines.
+    // Skip everything else.
+    const text = typeof payload === "string" ? payload : "";
+    const out = [];
+    let current = null;
+    text.split("\n").forEach(function (raw) {
+      const line = raw.trim();
+      const open = line.match(/^prices\s+(\S+)\s*$/);
+      if (open) { current = { provider: open[1], entries: [] }; out.push(current); return; }
+      if (line === "exit" && current) { current = null; return; }
+      if (current) {
+        const m = line.match(/^model\s+(\S+)\s+in\s+([0-9.]+)\s+out\s+([0-9.]+)\s*$/);
+        if (m) current.entries.push({ model: m[1], price_in: parseFloat(m[2]), price_out: parseFloat(m[3]) });
+      }
+    });
+    return out;
   }
   async function listTools() {
     const data = (await call("tools.list")).data || [];
@@ -477,7 +502,7 @@
     listRoutes: listRoutes, listBlocks: listBlocks,
     listInterfaces: listInterfaces, listQueues: listQueues,
     listPolicies: listPolicies, listSecrets: listSecrets,
-    listTools: listTools,
+    listTools: listTools, listPrices: listPrices,
     listRuns: listRuns, countRuns: countRuns,
     getRun: getRun, getRunSteps: getRunSteps,
     getStep: getStep, getRunContext: getRunContext,
