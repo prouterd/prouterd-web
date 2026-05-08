@@ -42,11 +42,21 @@
       + '</div>';
   });
 
+  // Inline form so the operator can paste a structured JSON value
+  // (LLM tool-call result, human approver decision, etc.) before
+  // resuming the paused run. Same shape / classes as the Trigger
+  // form on the Process Inspector for visual consistency.
   function resumeAction(uid) {
-    return '<div class="inspector-header__actions">' +
-      '<button type="button" class="action__btn" data-run-action="resume" ' +
-        'data-run-uid="' + esc(uid) + '">Resume run…</button>' +
-      '</div>';
+    return '<form class="trigger-form" data-resume-form data-run-uid="' + esc(uid) + '">'
+      +    '<p class="trigger-form__hint">This run is paused. Provide a JSON value to inject; downstream blocks see it as <code>{{wait_block.<key>}}</code> on resume.</p>'
+      +    '<label class="trigger-form__label">Resume value (JSON)</label>'
+      +    '<textarea class="trigger-form__input" spellcheck="false" autocomplete="off" rows="6">{}</textarea>'
+      +    '<div class="trigger-form__actions">'
+      +      '<button type="button" class="action__btn" data-resume-action="validate">validate JSON</button>'
+      +      '<button type="button" class="action__btn action__btn--primary" data-resume-action="resume">resume</button>'
+      +    '</div>'
+      +    '<div class="trigger-form__status" aria-live="polite"></div>'
+      +  '</form>';
   }
 
   function summaryTable(r) {

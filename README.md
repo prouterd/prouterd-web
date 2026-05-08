@@ -80,6 +80,7 @@ artifact downloads. Concretely the daemon must:
   | `runs.cancel`         | cancel a non-terminal run               |
   | `runs.replay`         | replay (optional `from_block`)          |
   | `runs.resume`         | resume a paused run with `value` (JSON) |
+  | `runs.resume_by_thread` | resume the most-recently-paused run carrying a thread_id |
   | `runs.logs`           | per-run logs (optional `step`/`after`)  |
   | `runs.artifacts`      | per-run artifact metadata               |
   | `tools.list`          | top-level `tool <name>` declarations    |

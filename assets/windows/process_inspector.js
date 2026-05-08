@@ -111,13 +111,15 @@
       return '<table class="data-table"><tbody><tr><td class="data-table__empty">No blocks defined.</td></tr></tbody></table>';
     }
     let out = '<table class="data-table"><thead><tr>' +
-      '<th>Block</th><th>Interface</th><th>Call</th><th>Timeout</th><th>Retry</th><th>Contract</th><th>Secrets</th>' +
+      '<th>Block</th><th>Interface</th><th>Call</th><th>Tags</th>' +
+      '<th>Timeout</th><th>Retry</th><th>Contract</th><th>Secrets</th>' +
       '</tr></thead><tbody>';
     blocks.forEach(function (b) {
       out += "<tr>" +
         td(b.name) +
-        td(b.interface_label) +
+        td(W.blockKindLabel(b)) +
         '<td class="data-table__truncate">' + (b.call_summary == null ? "—" : esc(b.call_summary)) + "</td>" +
+        '<td>' + W.blockBadges(b) + '</td>' +
         td(b.timeout_ms == null ? null : b.timeout_ms + " ms") +
         td(b.retry_policy) +
         td(b.contract) +

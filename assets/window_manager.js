@@ -171,6 +171,13 @@
       if (traceAction && !traceAction.disabled) {
         e.preventDefault();
         runTraceAction(traceAction);
+        return;
+      }
+
+      const resumeAction = e.target.closest("[data-resume-action]");
+      if (resumeAction && !resumeAction.disabled) {
+        e.preventDefault();
+        runResumeAction(resumeAction);
       }
     });
 
@@ -646,16 +653,6 @@
         const block = el.dataset.fromBlock;
         if (!block) return;
         result = await window.ProuterdAdapter.replayRun(uid, block);
-      } else if (action === "resume") {
-        const raw = prompt(
-          "Resume value (JSON, defaults to {}):",
-          el.dataset.resumeDefault || "{}"
-        );
-        if (raw == null) return;
-        let value;
-        try { value = JSON.parse(raw); }
-        catch (e) { alert("invalid JSON: " + e.message); return; }
-        result = await window.ProuterdAdapter.resumeRun(uid, value);
       } else {
         return;
       }
@@ -720,6 +717,64 @@
       open("run", result.run_uid);
     } catch (err) {
       status.textContent = "trigger failed: " + err.message;
+      status.className = "trigger-form__status trigger-form__status--error";
+    } finally {
+      el.disabled = false;
+    }
+  }
+
+  async function runResumeAction(el) {
+    const action = el.dataset.resumeAction;
+    const form   = el.closest("[data-resume-form]");
+    if (!form) return;
+    const uid    = form.dataset.runUid;
+    if (!uid) return;
+    const ta     = form.querySelector("textarea");
+    const status = form.querySelector(".trigger-form__status");
+
+    let parsed;
+    try { parsed = JSON.parse(ta.value); }
+    catch (e) {
+      status.textContent = "JSON parse error: " + e.message;
+      status.className = "trigger-form__status trigger-form__status--error";
+      return;
+    }
+
+    if (action === "validate") {
+      status.textContent = "JSON looks valid (" + (typeof parsed === "object" ? "object" : typeof parsed) + ")";
+      status.className = "trigger-form__status trigger-form__status--ok";
+      return;
+    }
+    if (action !== "resume") return;
+
+    el.disabled = true;
+    status.textContent = "resuming…";
+    status.className = "trigger-form__status";
+
+    try {
+      const result = await window.ProuterdAdapter.resumeRun(uid, parsed);
+      if (!result) {
+        status.textContent = "resume failed: run not found";
+        status.className = "trigger-form__status trigger-form__status--error";
+        return;
+      }
+      if (result.error) {
+        status.textContent = "resume failed: " + result.error;
+        status.className = "trigger-form__status trigger-form__status--error";
+        return;
+      }
+      status.textContent = "resumed → " + (result.status || "ok");
+      status.className = "trigger-form__status trigger-form__status--ok";
+
+      // Refresh affected windows so the resume button disappears once
+      // the run leaves the paused state. Live event /v1/events on the
+      // run topic also pushes step.* / run.updated, this is just the
+      // immediate-feedback path.
+      Array.from(state.windows.values())
+        .filter(function (ws) { return ws.type === "runs" || ws.type === "run" || ws.type === "system"; })
+        .forEach(function (ws) { hydrateBody(ws); });
+    } catch (err) {
+      status.textContent = "resume failed: " + err.message;
       status.className = "trigger-form__status trigger-form__status--error";
     } finally {
       el.disabled = false;
