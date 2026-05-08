@@ -469,6 +469,26 @@
       return { error: e.message };
     }
   }
+
+  // Resume the most-recently-paused run carrying `threadId`. Mirrors
+  // POST /v1/runs/by-thread/:tid/resume on core. Useful when the
+  // operator only knows the thread (e.g. landed from a chat-session
+  // pivot and the underlying run uid isn't on screen).
+  async function resumeRunByThread(threadId, value) {
+    const args = { thread_id: threadId };
+    if (value !== undefined) args.value = value;
+    try {
+      const p = await call("runs.resume_by_thread", args);
+      const data = p && p.data;
+      if (data) {
+        return { run_uid: data.run_id, status: data.status, thread_id: data.thread_id };
+      }
+      return { error: (p && p.error) || "resume failed" };
+    } catch (e) {
+      if (e.code === "not_found") return null;
+      return { error: e.message };
+    }
+  }
   async function rollbackConfig(commitId) {
     try {
       const p = await call("config.rollback", { commit_id: Number(commitId) });
@@ -511,7 +531,7 @@
     activeConfig: activeConfig, bootConfig: bootConfig,
     listCommits: listCommits, getCommit: getCommit, configDiff: configDiff,
     triggerProcess: triggerProcess, cancelRun: cancelRun, replayRun: replayRun,
-    resumeRun: resumeRun,
+    resumeRun: resumeRun, resumeRunByThread: resumeRunByThread,
     rollbackConfig: rollbackConfig, saveBootConfig: saveBootConfig,
     traceEvent: traceEvent
   };
