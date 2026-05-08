@@ -29,8 +29,8 @@ function loadAdapter(replies) {
       }
     },
     ProuterdCore: {
-      config: () => ({ url: "http://x:1", token: "t" }),
-      downloadUrl: (path) => "http://x:1" + path + "?token=t"
+      config: () => ({ url: "http://x:1" }),
+      downloadUrl: (path) => "http://x:1" + path
     },
     ProuterdDiff: {
       lines: (l, r) => [{ action: "=", text: "stub", left_no: 1, right_no: 1 }]
@@ -211,6 +211,5 @@ test("getStep parses input/output JSON from string-encoded wire fields", async (
 test("artifactDownloadUrl delegates to ProuterdCore.downloadUrl", () => {
   const { adapter } = loadAdapter({});
   const url = adapter.artifactDownloadUrl(42);
-  assert.match(url, /\/v1\/artifacts\/42\/download/);
-  assert.match(url, /token=t/);
+  assert.equal(url, "http://x:1/v1/artifacts/42/download");
 });

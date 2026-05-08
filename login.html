@@ -16,7 +16,7 @@
     <form id="login-form" class="login__form" autocomplete="off">
       <label for="login-url" class="login__label">Daemon URL</label>
       <input id="login-url" name="url" type="url" class="login__input"
-             placeholder="http://localhost:9000" required>
+             placeholder="http://localhost:8080" required>
 
       <label for="login-token" class="login__label">Bearer token</label>
       <input id="login-token" name="token" type="password" class="login__input"
@@ -27,16 +27,19 @@
   </main>
 
   <script>
-    // Validates the daemon URL + bearer by opening a WS to /v1/events
-    // with ?token=... and issuing one `status` RPC call. If the WS opens
-    // and the call replies, creds are good. We close the WS immediately
-    // and persist the creds before navigating to index.html.
+    // POST /v1/login validates the bearer once, the daemon hands us
+    // an HttpOnly cookie session. From then on the SPA holds nothing
+    // sensitive in JS — every request rides the cookie. Closes the
+    // XSS-leak window the old sessionStorage-bearer setup had.
+    //
+    // Requires the SPA to be served same-origin with the daemon (or
+    // behind a same-origin reverse proxy). The daemon's --console-dir
+    // flag handles the dev case: `prouterd --console-dir ./prouterd-
+    // web` serves both at the same host.
     (function () {
       "use strict";
 
       const STORAGE_KEY = "prouterd.core";
-      const HANDSHAKE_TIMEOUT_MS = 5000;
-      const CALL_TIMEOUT_MS      = 5000;
 
       let prefill = {};
       try { prefill = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}"); }
@@ -46,8 +49,10 @@
       const tokenEl = document.getElementById("login-token");
       const errEl   = document.getElementById("login-error");
       const submit  = document.getElementById("login-submit");
-      urlEl.value   = prefill.url   || "";
-      tokenEl.value = prefill.token || "";
+
+      // Default the URL to the page's own origin so same-origin
+      // deploys (the canonical mode) just work without typing.
+      urlEl.value = prefill.url || window.location.origin;
 
       document.getElementById("login-form").addEventListener("submit", async function (e) {
         e.preventDefault();
@@ -59,74 +64,33 @@
         submit.disabled = true;
         submit.textContent = "Signing in…";
         try {
-          await verify(url, token);
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url: url, token: token }));
+          const res = await fetch(url + "/v1/login", {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token: token })
+          });
+          if (res.status === 401) { fail("Invalid token"); return; }
+          if (res.status !== 200 && res.status !== 204) {
+            const text = await res.text().catch(function () { return ""; });
+            fail("HTTP " + res.status + (text ? ": " + text : ""));
+            return;
+          }
+
+          // Persist only the daemon URL — the cookie is HttpOnly and
+          // owned by the browser. JS never sees it again.
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ url: url }));
           const next = new URLSearchParams(window.location.search).get("next") || "index.html";
           window.location.href = next;
         } catch (err) {
-          fail(err.message);
+          // Network error: server unreachable, or cross-origin without
+          // CORS-with-credentials. Real fix: serve SPA same-origin.
+          fail("Cannot reach daemon: " + err.message);
         } finally {
           submit.disabled = false;
           submit.textContent = "Sign in";
         }
       });
-
-      function verify(url, token) {
-        return new Promise(function (resolve, reject) {
-          let wsUrl = url.replace(/^http/, "ws") + "/v1/events";
-          if (token) wsUrl += "?token=" + encodeURIComponent(token);
-
-          let ws;
-          try { ws = new WebSocket(wsUrl); }
-          catch (e) { return reject(new Error("Cannot reach daemon: " + e.message)); }
-
-          let settled = false;
-          const finish = function (err, val) {
-            if (settled) return;
-            settled = true;
-            try { ws.close(); } catch (e) {}
-            err ? reject(err) : resolve(val);
-          };
-
-          const handshakeTimer = setTimeout(function () {
-            finish(new Error("Daemon did not respond within " + (HANDSHAKE_TIMEOUT_MS / 1000) + "s"));
-          }, HANDSHAKE_TIMEOUT_MS);
-
-          let callTimer = null;
-
-          ws.addEventListener("open", function () {
-            clearTimeout(handshakeTimer);
-            const id = "login_" + Date.now();
-            ws.send(JSON.stringify({ id: id, type: "call", payload: { method: "status", args: {} } }));
-            callTimer = setTimeout(function () {
-              finish(new Error("Daemon accepted the connection but did not reply to status"));
-            }, CALL_TIMEOUT_MS);
-          });
-
-          ws.addEventListener("message", function (e) {
-            let msg;
-            try { msg = JSON.parse(e.data); } catch (err) { return; }
-            if (!msg.reply_to) return;     // ignore unrelated frames
-            if (callTimer) clearTimeout(callTimer);
-            if (msg.type === "reply") return finish(null, msg.payload);
-            if (msg.type === "error") {
-              const p = msg.payload || {};
-              if (p.code === "unauthorized") return finish(new Error("Invalid token"));
-              return finish(new Error(p.message || "rpc error"));
-            }
-            finish(new Error("Unexpected reply frame: " + msg.type));
-          });
-
-          ws.addEventListener("close", function () {
-            if (settled) return;
-            // Closed before we got a reply — most likely auth rejected
-            // at handshake (server closes before sending anything).
-            finish(new Error("Daemon refused the connection (token rejected?)"));
-          });
-
-          ws.addEventListener("error", function () { /* close will follow */ });
-        });
-      }
 
       function fail(msg) { errEl.textContent = msg; errEl.hidden = false; }
     })();

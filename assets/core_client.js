@@ -1,12 +1,15 @@
 // core_client.js
 //
-// Session storage + WS URL helper. The console talks to the daemon
-// over WS-RPC (see ws_client.js); the only HTTP request the SPA makes
-// is the artifact-download anchor, which uses downloadUrl().
+// Daemon URL + WS / download URL helpers. Auth lives entirely in an
+// HttpOnly cookie set by POST /v1/login (see login.html); the SPA
+// holds nothing sensitive in JS, so an XSS in console code can't
+// leak the credential.
 //
-// Daemon URL + bearer token are populated by login.html into
-// sessionStorage and read here. logout() clears both and bounces to
-// the login page.
+// Requires same-origin deployment with the daemon (or a same-origin
+// reverse proxy in front). The daemon's `--console-dir PATH` flag is
+// the canonical dev/prod single-process setup: `prouterd
+// --console-dir ./prouterd-web` serves the SPA and /v1 from one
+// host, cookies just work, no CORS knobs needed.
 
 (function () {
   "use strict";
@@ -44,28 +47,28 @@
 
   function wsUrl(path) {
     const cfg = requireConfig();
-    const wsBase = cfg.url.replace(/^http/, "ws");
-    let url = wsBase + path;
-    if (cfg.token) {
-      url += (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(cfg.token);
-    }
-    return url;
+    return cfg.url.replace(/^http/, "ws") + path;
   }
 
-  // The one HTTP touchpoint left: artifact downloads. The browser
-  // navigates to this URL via <a download>, so we embed the bearer in
-  // the query string the same way as the WS handshake.
+  // Plain HTTP URL for artifact downloads (browser navigates to it
+  // via <a download>). Cookie auto-attaches the same way it does for
+  // any other navigation to the daemon's origin.
   function downloadUrl(path) {
     const cfg = config();
     if (!cfg.url) return "";
-    let url = cfg.url + path;
-    if (cfg.token) {
-      url += (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(cfg.token);
-    }
-    return url;
+    return cfg.url + path;
   }
 
-  function logout() {
+  // POST /v1/logout to revoke the server-side session, then drop our
+  // local URL hint and bounce to login. Best-effort: a network error
+  // doesn't block the local clear.
+  async function logout() {
+    const cfg = config();
+    if (cfg.url) {
+      try {
+        await fetch(cfg.url + "/v1/logout", { method: "POST", credentials: "include" });
+      } catch (e) { /* ignore */ }
+    }
     clearConfig();
     redirectToLogin();
   }

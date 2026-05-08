@@ -1,20 +1,21 @@
 # prouterd-web
 
 Operator console for the [prouterd](../prouterd-core) Process Router — a
-zero-build static SPA. Open `index.html` in any browser, point it at a
-running prouterd-core daemon, and the console talks to it over a single
-WebSocket plus one anchor for artifact downloads. No build step, no
-proxy, no Ruby.
+zero-build static SPA. Same-origin with the daemon, one WebSocket
+for everything live, one anchor for artifact downloads. No build
+step, no Ruby.
 
 ```
-Browser  ──WS  /v1/events  (RPC + live events,  ?token=)  ──>  prouterd daemon
-         ──WS  /v1/cli/:sid (interactive shell, ?token=)  ──>  SQLite + runners
-         ──HTTP /v1/artifacts/:id/download    (?token=)   ──>  + scheduler
+Browser  ──HTTP POST /v1/login  (one bearer check, sets cookie)  ──>  prouterd daemon
+         ──WS   /v1/events       (RPC + live events, cookie auth)  ──>  SQLite + runners
+         ──WS   /v1/cli/:sid     (interactive shell,   cookie auth) ──>  + scheduler
+         ──HTTP /v1/artifacts/:id/download (plain navigation)       ──>
 ```
 
 The daemon's HTTP `/v1/*` API stays in place for `curl`, automation,
-k8s probes, monitoring — the SPA just doesn't use it. Anything the
-console needs goes through one RPC envelope on `/v1/events`:
+k8s probes, monitoring — the SPA just doesn't use it for anything
+beyond login. Console traffic goes through one RPC envelope on
+`/v1/events`:
 
 ```jsonc
 // browser → daemon
@@ -24,33 +25,35 @@ console needs goes through one RPC envelope on `/v1/events`:
 { "reply_to": "msg_42", "type": "error", "payload": { "code": "not_found", "message": "..." } }
 ```
 
-The same socket continues to carry the existing
-`subscribe`/`unsubscribe`/event frames for live updates.
+The same socket carries the existing `subscribe`/`unsubscribe`/event
+frames for live updates.
 
 ## Quickstart
 
-### 1. Run a prouterd daemon
+The canonical setup is to let the daemon serve the SPA so it's
+same-origin with `/v1`. The daemon's `--console-dir` flag does that
+in one process — no nginx, no CORS, cookies just work.
 
 ```sh
 cd ../prouterd-core
 PROUTERD_ADMIN_TOKEN=demo bundle exec exe/prouterd \
-  --db /tmp/prouterd.db --port 9000
+  --db /tmp/prouterd.db --port 8080 \
+  --console-dir ../prouterd-web
 ```
 
-### 2. Serve the static console
+Open <http://localhost:8080/console/login.html>, enter the bearer
+token, sign in. The daemon hands back an HttpOnly cookie session;
+the SPA holds nothing sensitive in JS.
 
-Anything that serves a directory works — `python3`, `npx serve`, nginx,
-GitHub Pages, S3:
+For ad-hoc dev without `--console-dir`:
 
 ```sh
-python3 -m http.server 8080
+python3 -m http.server 8080            # in prouterd-web/
 ```
 
-Open <http://localhost:8080/login.html>, enter the daemon URL
-(`http://localhost:9000`) and the bearer token, sign in.
-
-The console stores `{ url, token }` in `sessionStorage` — closing the
-tab logs out.
+…but you'll need to put a same-origin reverse proxy in front, or
+configure CORS-with-credentials on the daemon. The default no-CORS
+setup expects same-origin.
 
 ## What core has to provide
 
@@ -95,13 +98,20 @@ artifact downloads. Concretely the daemon must:
   Error codes the SPA recognises: `not_found`, `bad_request`,
   `unauthorized`, anything else is shown verbatim.
 
-- **`?token=...` query auth** on `/v1/events`, `/v1/cli/:session_id`,
-  and `/v1/artifacts/:id/download`. Used as fallback when the
-  `Authorization` header is unavailable (WS handshake from the browser,
-  plain `<a download>` navigation).
+- **Cookie session auth.** `POST /v1/login` validates the bearer
+  once and sets `prouterd_session=<id>; HttpOnly; SameSite=Lax`.
+  Subsequent fetch / WS / `<a download>` traffic rides the cookie
+  automatically — the SPA never holds the bearer in JS, so an XSS
+  in console code can't leak the credential. `POST /v1/logout`
+  revokes the server-side session and clears the cookie.
 
-CORS isn't needed: WS handshakes aren't subject to it the same way
-fetch is, and the artifact download is plain navigation (no preflight).
+  Bearer auth (`Authorization: Bearer …` header or `?token=…` query)
+  is still accepted on every endpoint for `curl` / k8s probes /
+  automation; the SPA just doesn't use it.
+
+- **`--console-dir PATH`** flag on the daemon. Serves the SPA's
+  static directory at `/console/*` in the same process. Same-origin
+  by construction → cookies attach without CORS plumbing.
 
 ## Layout
 
@@ -160,13 +170,11 @@ live-update events trigger a debounced re-render.
 
 ## Caveats
 
-- **Bearer in `sessionStorage`** — the standard SPA tradeoff. XSS in
-  the console code would leak the token. Acceptable for an operator
-  tool on a trusted network; for internet-facing deploys, the daemon
-  should grow a cookie-session login.
-- **Logs window does full re-fetch on tail events** — bandwidth-heavy
-  for very chatty runs. An incremental-append path is on the followup
-  list.
+- **Same-origin assumption.** The cookie-only auth model assumes the
+  SPA and the daemon share an origin. The daemon's `--console-dir`
+  flag (single-process deploy) and any same-origin reverse proxy
+  (nginx / Caddy / Traefik) qualify. A cross-origin SPA would need
+  the daemon to ship CORS-with-credentials; not currently configured.
 - **In-flight RPC calls are rejected on WS reconnect.** The reconnect
   itself is automatic and the topic subscription state is restored;
   any call whose reply was lost will be re-issued by the next
