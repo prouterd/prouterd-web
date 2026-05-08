@@ -87,6 +87,8 @@ artifact downloads. Concretely the daemon must:
   | `runs.logs`           | per-run logs (optional `step`/`after`)  |
   | `runs.artifacts`      | per-run artifact metadata               |
   | `tools.list`          | top-level `tool <name>` declarations    |
+  | `mcp.list`            | `interface mcp` declarations + live pool health (state, tools, last error) |
+  | `local_repo.status`   | `interface local_repo` auto-pull state per whitelist entry |
   | `config.running`      | rendered active config text             |
   | `config.startup`      | rendered boot config text               |
   | `config.commits`      | commit history + meta.running/.startup  |

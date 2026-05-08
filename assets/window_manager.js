@@ -44,6 +44,8 @@
     logs: "Logs",
     context: "Context",
     artifacts: "Artifacts",
+    mcp: "MCP",
+    "local-repo": "Local repos",
     cli: "CLI"
   };
 
@@ -268,6 +270,8 @@
       case "policies":   return ["system"];
       case "secrets":    return ["system"];
       case "tools":      return ["system"];
+      case "mcp":        return ["system"];
+      case "local-repo": return ["system"];
       default:           return [];
     }
   }

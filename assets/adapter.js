@@ -293,6 +293,48 @@
     });
   }
 
+  // MCP interfaces (Phase 39): each `interface mcp <name>` declared
+  // in the running config, joined with the live pool's health
+  // (state ∈ starting | ready | degraded | stopped | unknown |
+  // no_pool, the discovered tool list, last_error).
+  async function listMcp() {
+    const data = (await call("mcp.list")).data || [];
+    return data.map(function (m) {
+      const srv = m.server || {};
+      return {
+        name:                 m.name,
+        server_kind:          srv.kind || null,
+        server_spec:          srv.spec || null,
+        server_label:         (srv.kind && srv.spec) ? srv.kind + " " + srv.spec : null,
+        cwd:                  m.cwd || null,
+        secrets:              m.secrets || [],
+        timeout_tool_call_ms: m.timeout_tool_call_ms,
+        state:                m.state || "unknown",
+        tools:                m.tools || [],
+        last_error:           m.last_error || null
+      };
+    });
+  }
+
+  // local_repo auto-pull status (Phase 38): per `interface local_repo`
+  // / per whitelist entry, the most recent auto-pull outcome.
+  // `ok:true` carries `summary`; `ok:false` carries `error`.
+  // `checked_at` is the wall-clock of the last poll. Empty when no
+  // local_repo iface declares `auto-pull` or daemon just started.
+  async function getLocalRepoStatus() {
+    const data = (await call("local_repo.status")).data || [];
+    return data.map(function (e) {
+      return {
+        iface:      e.iface || null,
+        repo:       e.repo,
+        ok:         e.ok === true,
+        summary:    e.summary || null,
+        error:      e.error || null,
+        checked_at: e.checked_at || null
+      };
+    });
+  }
+
   async function listRuns(filters) {
     filters = filters || {};
     const args = {};
@@ -523,6 +565,7 @@
     listInterfaces: listInterfaces, listQueues: listQueues,
     listPolicies: listPolicies, listSecrets: listSecrets,
     listTools: listTools, listPrices: listPrices,
+    listMcp: listMcp, getLocalRepoStatus: getLocalRepoStatus,
     listRuns: listRuns, countRuns: countRuns,
     getRun: getRun, getRunSteps: getRunSteps,
     getStep: getStep, getRunContext: getRunContext,
