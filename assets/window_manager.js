@@ -239,7 +239,8 @@
   function topicsForWindow(ws) {
     switch (ws.type) {
       case "system":     return ["system"];
-      case "processes":  return ["runs"];
+      case "processes":  return ["runs", "system"];
+      case "process":    return ["system"];
       case "runs":       return ["runs"];
       case "run":        return ws.resourceId ? ["run:" + ws.resourceId] : [];
       case "step": {
@@ -249,8 +250,17 @@
       case "logs":       return ws.resourceId ? ["logs:" + ws.resourceId] : [];
       case "context":    return ws.resourceId ? ["run:" + ws.resourceId] : [];
       case "artifacts":  return ws.resourceId ? ["run:" + ws.resourceId] : [];
+      // Config-derived windows: refresh on every config commit / rollback /
+      // save-boot via the daemon's "system" topic.
       case "config":     return ["system"];
       case "diff":       return ["system"];
+      case "interfaces": return ["system"];
+      case "blocks":     return ["system"];
+      case "routes":     return ["system"];
+      case "queues":     return ["system"];
+      case "policies":   return ["system"];
+      case "secrets":    return ["system"];
+      case "tools":      return ["system"];
       default:           return [];
     }
   }
@@ -767,6 +777,9 @@
     }
   }
 
+  // Daemon's /v1/trace payload (unchanged at the v1 → ws-rpc transition):
+  //   { interface, process, global_route_matched, edges:[{from,to,passes,
+  //     matches:[{path,operator,values,result}]}], policies, warnings, error }
   function renderTraceTree(data) {
     const lines = [];
     if (data.error) {
@@ -774,33 +787,50 @@
       return lines.join("");
     }
 
-    if (data.global_route !== undefined) {
-      lines.push('<div class="trace-section"><div class="trace-section__head">Global route</div>');
-      const passes = data.global_route_passes ? "passes" : "blocked";
-      const klass  = data.global_route_passes ? "status-success" : "status-failed";
-      const gr = data.global_route || {};
-      lines.push('<div class="trace-row"><span class="' + klass + '">' + passes + '</span> ' +
-                 escapeHtml(gr.from || gr.from_interface || "?") + " → " +
-                 escapeHtml(gr.to || gr.to_process || data.process || "?") + "</div>");
+    // Header line: which interface fed in, which process matched, did the
+    // global route accept the event at all.
+    if (data.interface || data.process || data.global_route_matched !== undefined) {
+      lines.push('<div class="trace-section"><div class="trace-section__head">Routing</div>');
+      const matched = data.global_route_matched !== false;
+      const klass   = matched ? "status-success" : "status-failed";
+      const verdict = matched ? "matched" : "no global route matched";
+      lines.push('<div class="trace-row"><span class="' + klass + '">' + verdict + '</span></div>');
+      if (data.interface) {
+        lines.push('<div class="trace-row"><b>interface</b> ' + escapeHtml(data.interface) + '</div>');
+      }
+      if (data.process) {
+        lines.push('<div class="trace-row"><b>process</b> ' + escapeHtml(data.process) + '</div>');
+      }
       lines.push('</div>');
     }
 
-    if (data.process) {
-      lines.push('<div class="trace-section"><div class="trace-section__head">Process</div>');
-      lines.push('<div class="trace-row">' + escapeHtml(data.process) + '</div>');
+    // Per-edge verdicts: each route in the matched process gets passes/blocked
+    // plus the per-match path/op/values/result triple so the operator can
+    // see WHY a route blocked the event.
+    const edges = data.edges || [];
+    if (edges.length) {
+      lines.push('<div class="trace-section"><div class="trace-section__head">Routes</div>');
+      edges.forEach(function (e) {
+        const klass   = e.passes ? "status-success" : "status-failed";
+        const verdict = e.passes ? "passes" : "blocked";
+        lines.push('<div class="trace-row"><span class="' + klass + '">' + verdict + '</span> ' +
+                   escapeHtml(e.from || "?") + " → " + escapeHtml(e.to || "?") + '</div>');
+        (e.matches || []).forEach(function (m) {
+          const cls  = m.result ? "status-success" : "status-failed";
+          const vals = Array.isArray(m.values) ? m.values.map(JSON.stringify).join(", ") : String(m.values);
+          lines.push('<div class="trace-row trace-row--indent">' +
+                     '<span class="' + cls + '">' + (m.result ? "✓" : "✗") + '</span> ' +
+                     escapeHtml(m.path) + " " + escapeHtml(m.operator) + " " +
+                     escapeHtml(vals) + '</div>');
+        });
+      });
       lines.push('</div>');
     }
 
-    const graph = data.graph || data.execution_plan || [];
-    if (graph.length) {
-      lines.push('<div class="trace-section"><div class="trace-section__head">Execution plan</div>');
-      graph.forEach(function (node) {
-        const dep = node.depends_on || node.from || "—";
-        const cond = node.condition ? " · " + escapeHtml(node.condition) : "";
-        const def  = node.deferred ? ' <span class="status-retrying">[deferred]</span>' : "";
-        lines.push('<div class="trace-row">' +
-                   escapeHtml(node.block || node.to || "?") + " ← " +
-                   escapeHtml(dep) + cond + def + '</div>');
+    if (Array.isArray(data.policies) && data.policies.length) {
+      lines.push('<div class="trace-section"><div class="trace-section__head">Policies in scope</div>');
+      data.policies.forEach(function (p) {
+        lines.push('<div class="trace-row">' + escapeHtml(p) + '</div>');
       });
       lines.push('</div>');
     }

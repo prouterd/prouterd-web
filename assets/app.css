@@ -657,6 +657,10 @@ button {
   font-size: 12px;
   padding: 2px 0;
 }
+.trace-row--indent {
+  padding-left: 18px;
+  color: var(--fg-dim);
+}
 
 /* ----- pagination footer ----- */
 .pagination {

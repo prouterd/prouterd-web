@@ -103,11 +103,14 @@
   function runToHash(r) {
     return {
       run_uid: r.uid, process_name: r.process_name, status: r.status,
-      duration_ms: r.duration_ms, started_at: r.started_at, finished_at: r.finished_at,
+      duration_ms: r.duration_ms,
+      created_at: r.created_at,           // queued time — useful before started_at fills in
+      started_at: r.started_at, finished_at: r.finished_at,
       config_commit: r.commit_id, trigger: r.interface_name, replay_of: r.replay_of_uid,
       thread_id: r.thread_id || null,
       tokens_in:  typeof r.tokens_in  === "number" ? r.tokens_in  : 0,
-      tokens_out: typeof r.tokens_out === "number" ? r.tokens_out : 0
+      tokens_out: typeof r.tokens_out === "number" ? r.tokens_out : 0,
+      cost_usd:   typeof r.cost_usd   === "number" ? r.cost_usd   : 0
     };
   }
   function stepToHash(s) {

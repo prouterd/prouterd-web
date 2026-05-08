@@ -24,14 +24,23 @@
     let out = '<table class="data-table">' +
       '<thead><tr>' +
         '<th>Run</th><th>Process</th><th>Thread</th><th>Status</th>' +
-        '<th>Duration</th><th>Tokens</th><th>Started</th><th>Trigger</th>' +
+        '<th>Duration</th><th>Tokens</th><th>Cost</th><th>Started</th><th>Trigger</th>' +
       '</tr></thead><tbody>';
     if (runs.length === 0) {
-      out += '<tr><td colspan="8" class="data-table__empty">No runs yet.</td></tr>';
+      out += '<tr><td colspan="9" class="data-table__empty">No runs yet.</td></tr>';
     } else {
       runs.forEach(function (r) {
         const tokens = (r.tokens_in || r.tokens_out)
           ? (r.tokens_in + " ↑ / " + r.tokens_out + " ↓") : "—";
+        const cost = r.cost_usd > 0 ? "$" + r.cost_usd.toFixed(4) : "—";
+        // Queued runs haven't started yet — fall back to created_at and
+        // mark it visually so the operator can tell it's a "queued at"
+        // timestamp, not a "started at" one.
+        const when = r.started_at != null
+          ? esc(r.started_at)
+          : (r.created_at != null
+              ? '<span class="status-queued">queued ' + esc(r.created_at) + '</span>'
+              : "—");
         out += '<tr class="data-table__row--clickable" data-open-window="run" ' +
                'data-open-resource="' + esc(r.run_uid) + '">' +
           "<td>" + esc(r.run_uid) + "</td>" +
@@ -40,7 +49,8 @@
           '<td class="status-' + esc(r.status) + '">' + esc(r.status) + '</td>' +
           "<td>" + (r.duration_ms == null ? "—" : esc(r.duration_ms + " ms")) + "</td>" +
           "<td>" + esc(tokens) + "</td>" +
-          "<td>" + (r.started_at  == null ? "—" : esc(r.started_at)) + "</td>" +
+          "<td>" + esc(cost) + "</td>" +
+          "<td>" + when + "</td>" +
           "<td>" + (r.trigger     == null ? "—" : esc(r.trigger)) + "</td>" +
           "</tr>";
       });

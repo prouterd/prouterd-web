@@ -19,8 +19,13 @@
       +     '<span><b>duration</b> ' + (r.duration_ms == null ? "—" : esc(r.duration_ms + " ms")) + '</span>'
       +     '<span><b>config</b> #' + (r.config_commit == null ? "—" : esc(r.config_commit)) + '</span>'
       +     '<span><b>trigger</b> ' + (r.trigger == null ? "—" : esc(r.trigger)) + '</span>'
-      +     (r.thread_id ? '<span><b>thread</b> ' + esc(r.thread_id) + '</span>' : "")
+      +     (r.thread_id
+              ? '<span><b>thread</b> <a href="#" data-open-window="runs" ' +
+                'data-open-resource="thread_id=' + encodeURIComponent(r.thread_id) + '">' +
+                esc(r.thread_id) + '</a></span>'
+              : "")
       +     ((r.tokens_in || r.tokens_out) ? '<span><b>tokens</b> ' + esc(r.tokens_in) + ' ↑ / ' + esc(r.tokens_out) + ' ↓</span>' : "")
+      +     (r.cost_usd > 0 ? '<span><b>cost</b> $' + r.cost_usd.toFixed(4) + '</span>' : "")
       +     (r.replay_of ? '<span><b>replay of</b> <a href="#" data-open-window="run" data-open-resource="' + esc(r.replay_of) + '">' + esc(r.replay_of) + '</a></span>' : "")
       +   '</div>'
       +   (r.status === "paused" ? resumeAction(r.run_uid) : "")
@@ -49,16 +54,22 @@
       const cell = v == null ? "—" : (raw ? v : esc(v));
       return "<tr><td>" + esc(k) + "</td><td>" + cell + "</td></tr>";
     }
+    const threadCell = r.thread_id
+      ? '<a href="#" data-open-window="runs" data-open-resource="thread_id=' +
+        encodeURIComponent(r.thread_id) + '">' + esc(r.thread_id) + '</a>'
+      : null;
     return '<table class="kv-table"><tbody>' +
       row("Run",           r.run_uid) +
       row("Process",       r.process_name) +
-      row("Thread",        r.thread_id) +
+      row("Thread",        threadCell, true) +
       row("Status",        '<span class="status-' + esc(r.status) + '">' + esc(r.status) + '</span>', true) +
+      row("Queued",        r.created_at) +
       row("Started",       r.started_at) +
       row("Finished",      r.finished_at) +
       row("Duration",      r.duration_ms == null ? null : r.duration_ms + " ms") +
       row("Tokens in",     r.tokens_in  ? esc(r.tokens_in)  : null, true) +
       row("Tokens out",    r.tokens_out ? esc(r.tokens_out) : null, true) +
+      row("Cost",          r.cost_usd > 0 ? "$" + r.cost_usd.toFixed(4) : null) +
       row("Config commit", r.config_commit == null ? null : "#" + r.config_commit) +
       row("Trigger",       r.trigger) +
       row("Interface",     r.interface_name) +
