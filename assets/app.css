@@ -917,6 +917,8 @@ body.login-page {
 .status-skipped  { color: var(--fg-mute); }
 .status-queued   { color: var(--info); }
 .status-enabled  { color: var(--ok); }
+.status-paused   { color: var(--warn); }
+.status-ready    { color: var(--ok); }
 .status-canceled { color: var(--fg-mute); }
 
 /* ----- process graph (Graph tab in Process Inspector) ----- */
